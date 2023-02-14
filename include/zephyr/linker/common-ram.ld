@@ -52,6 +52,22 @@
                KEEP(*(".dtb_domd"));
                __dtb_domd_end = .;
 	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_DATA_PROLOGUE(img_unikraft,,)
+	{
+		. = ALIGN(64);
+		__img_unikraft_start = .;
+		KEEP(*(".img_unikraft"));
+		__img_unikraft_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
+
+	SECTION_DATA_PROLOGUE(dtb_unikraft,,)
+	{
+		. = ALIGN(64);
+		__dtb_unikraft_start = .;
+		KEEP(*(".dtb_unikraft"));
+		__dtb_unikraft_end = .;
+	} GROUP_DATA_LINK_IN(RAMABLE_REGION, ROMABLE_REGION)
 #endif
 
 #if CONFIG_PM_DEVICE
