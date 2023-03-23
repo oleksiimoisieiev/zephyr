@@ -33,6 +33,16 @@ static struct fs_mount_t fatfs_mnt = {
 /* LITTLEFS */
 #ifdef CONFIG_FILE_SYSTEM_LITTLEFS
 #include <zephyr/fs/littlefs.h>
+
+#ifdef CONFIG_FS_LITTLEFS_BLK_DEV
+FS_LITTLEFS_DECLARE_DEFAULT_CONFIG(lfs_data);
+static struct fs_mount_t littlefs_mnt = {
+	.type = FS_LITTLEFS,
+	.fs_data = &lfs_data,
+	.flags = FS_MOUNT_FLAG_USE_DISK_ACCESS,
+	.storage_dev = CONFIG_SDMMC_VOLUME_NAME,
+};
+#else
 #include <zephyr/storage/flash_map.h>
 
 FS_LITTLEFS_DECLARE_DEFAULT_CONFIG(lfs_data);
@@ -41,6 +51,7 @@ static struct fs_mount_t littlefs_mnt = {
 	.fs_data = &lfs_data,
 	.storage_dev = (void *)STORAGE_PARTITION_ID,
 };
+#endif
 #endif
 
 #define BUF_CNT 64
@@ -523,6 +534,15 @@ static int cmd_mount_fat(const struct shell *shell, size_t argc, char **argv)
 
 static int cmd_mount_littlefs(const struct shell *shell, size_t argc, char **argv)
 {
+#ifdef CONFIG_FS_LITTLEFS_BLK_DEV
+	static const char *disk_mount_pt = "/"CONFIG_SDMMC_VOLUME_NAME":";
+
+	char *mntpt = mntpt_prepare(argv[1]);
+
+	if (!mntpt) {
+		mntpt = disk_mount_pt;
+	}
+#else
 	if (littlefs_mnt.mnt_point != NULL) {
 		return -EBUSY;
 	}
@@ -533,6 +553,7 @@ static int cmd_mount_littlefs(const struct shell *shell, size_t argc, char **arg
 		shell_error(shell, "Failed to allocate mount point");
 		return -ENOEXEC; /* ?!? */
 	}
+#endif
 
 	littlefs_mnt.mnt_point = mntpt;
 
