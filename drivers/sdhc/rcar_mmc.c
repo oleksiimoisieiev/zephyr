@@ -1297,6 +1297,10 @@ static int rcar_mmc_init_start_clk(const struct mmc_rcar_cfg *cfg)
 	sys_write32(1, clk_cfg->base_address + SDIF2_CFCR_OFFSET);
 
 	ret = clock_control_on(cpg_dev, (clock_control_subsys_t *)&cfg->cpg_clk);
+
+	/* SD spec recommends at least 1 ms of delay after start of clock */
+	k_msleep(1);
+
 	return ret;
 }
 
