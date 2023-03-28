@@ -37,7 +37,7 @@
 #include "grant_table.h"
 #include "memory.h"
 
-#define XEN_DOMCTL_INTERFACE_VERSION 0x00000015
+#define XEN_DOMCTL_INTERFACE_VERSION 0x00000014
 
 /*
  * NB. xen_domctl.domain is an IN/OUT parameter for this operation.
@@ -104,9 +104,6 @@ struct xen_domctl_createdomain {
 
     /* Per-vCPU buffer size in bytes.  0 to disable. */
     uint32_t vmtrace_size;
-
-    /* CPU pool to use; specify 0 or a specific existing pool */
-    uint32_t cpupool_id;
 
     struct xen_arch_domainconfig arch;
 };
