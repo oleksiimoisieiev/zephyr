@@ -1,0 +1,9 @@
+/ {
+	firmware {
+		 tee {
+		       compatible = "test,tee";
+		       method = "smc";
+		       status = "okay";
+		 };
+  	};
+};
