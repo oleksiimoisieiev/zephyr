@@ -45,25 +45,13 @@ static int test_tee_invoke_func(const struct device *dev, struct tee_invoke_func
 }
 
 static int test_tee_shm_register(const struct device *dev, void *addr, size_t size, uint32_t flags,
-			       struct tee_shm **shm)
+			       struct tee_shm *shm)
 {
 	printk("%s %d\n", __func__, __LINE__);
 	return 0;
 }
 
 static int test_tee_shm_unregister(const struct device *dev, struct tee_shm *shm)
-{
-	printk("%s %d\n", __func__, __LINE__);
-	return 0;
-}
-
-static int test_tee_shm_alloc(const struct device *dev, size_t size, uint32_t flags, void **addr)
-{
-	printk("%s %d\n", __func__, __LINE__);
-	return 0;
-}
-
-static int test_tee_shm_free(const struct device *dev, void *addr)
 {
 	printk("%s %d\n", __func__, __LINE__);
 	return 0;
@@ -98,8 +86,6 @@ static const struct tee_driver_api test_tee_driver_api = {
 	.invoke_func = test_tee_invoke_func,
 	.shm_register = test_tee_shm_register,
 	.shm_unregister = test_tee_shm_unregister,
-	.shm_alloc = test_tee_shm_alloc,
-	.shm_free = test_tee_shm_free,
 	.suppl_recv = test_tee_suppl_recv,
 	.suppl_send = test_tee_suppl_send,
 };
