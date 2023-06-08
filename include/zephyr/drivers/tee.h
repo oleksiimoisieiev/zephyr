@@ -35,13 +35,17 @@
  * - tee_shm_free() to free shared memory region
  */
 
-#include <zephyr/kernel.h>
 #include <zephyr/device.h>
+#include <zephyr/kernel.h>
+#include <zephyr/sys/util.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 #define TEE_UUID_LEN 16
+
+#define TEE_SHM_REGISTER BIT(0)
+#define TEE_SHM_ALLOC BIT(1)
 
 /**
  * @brief TEE version
@@ -183,24 +187,6 @@ typedef int (*tee_cancel_t)(const struct device *dev, uint32_t session_id, uint3
 typedef int (*tee_invoke_func_t)(const struct device *dev, struct tee_invoke_func_arg *arg,
 				 unsigned int num_param, struct tee_param *param);
 /**
- * @typedef tee_shm_alloc_t
- *
- * @brief Callback API to allocate shared memory region
- *
- * See @a tee_shm_alloc() for argument definitions.
- */
-typedef int (*tee_shm_alloc_t)(const struct device *dev, uint64_t size, uint32_t flags,
-			       void **addr);
-/**
- * @typedef tee_shm_free_t
- *
- * @brief Callback API to free previosly allocated shared memory region
- *
- * See @a tee_shm_free() for argument definitions.
- */
-typedef int (*tee_shm_free_t)(const struct device *dev, void *addr);
-
-/**
  * @typedef tee_shm_register_t
  *
  * @brief Callback API to register shared memory
@@ -208,7 +194,7 @@ typedef int (*tee_shm_free_t)(const struct device *dev, void *addr);
  * See @a tee_shm_register() for argument definitions.
  */
 typedef int (*tee_shm_register_t)(const struct device *dev, void *addr, uint64_t size,
-				  uint32_t flags, struct tee_shm **shm);
+				  uint32_t flags, struct tee_shm *shm);
 
 /**
  * @typedef tee_shm_unregister_t
@@ -247,8 +233,6 @@ __subsystem struct tee_driver_api {
 	tee_invoke_func_t invoke_func;
         tee_shm_register_t shm_register;
 	tee_shm_unregister_t shm_unregister;
-	tee_shm_alloc_t shm_alloc;
-	tee_shm_free_t shm_free;
 	tee_suppl_recv_t suppl_recv;
 	tee_suppl_send_t suppl_send;
 };
@@ -391,6 +375,91 @@ static inline int z_impl_tee_invoke_func(const struct device *dev, struct tee_in
 	return api->invoke_func(dev, arg, num_param, param);
 }
 
+static inline int tee_add_shm(const struct device *dev, void *addr, size_t size, uint32_t flags,
+			      struct tee_shm **shmp)
+{
+	int rc;
+	void *p = addr;
+	struct tee_shm *shm;
+
+	if (!shmp || !size) {
+		return -EINVAL;
+	}
+
+	if (flags & TEE_SHM_ALLOC) {
+		p = k_malloc(size);
+	}
+
+	if (!p) {
+		return -ENOMEM;
+	}
+
+	shm = k_malloc(sizeof(struct tee_shm));
+	if (!shm) {
+		rc = -ENOMEM;
+		goto err;
+	}
+
+	shm->addr = p;
+	shm->size = size;
+	shm->flags = flags;
+	shm->dev = dev;
+
+	if (flags & TEE_SHM_REGISTER) {
+		const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
+
+		if (api->shm_register == NULL) {
+			rc = -ENOSYS;
+			goto err;
+		}
+
+		rc = api->shm_register(dev, addr, size, flags, shm);
+		if (rc) {
+			goto err;
+		}
+	}
+
+	*shmp = shm;
+
+	return 0;
+err:
+	k_free(shm);
+	if (flags & TEE_SHM_ALLOC) {
+		k_free(p);
+	}
+
+	return rc;
+}
+
+static inline int tee_rm_shm(const struct device *dev, struct tee_shm *shm)
+{
+	int rc = 0;
+
+	if (!shm) {
+		return -EINVAL;
+	}
+
+	if (shm->flags & TEE_SHM_REGISTER) {
+		const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
+
+		if (api->shm_unregister) {
+			/*
+			 * We don't return immediately if callback returned error,
+			 * just return this code after cleanup.
+			 */
+			rc = api->shm_unregister(dev, shm);
+		}
+	}
+
+	if (shm->flags & TEE_SHM_ALLOC) {
+		k_free(shm->addr);
+	}
+
+	k_free(shm);
+
+	return rc;
+}
+
 /**
  * @brief Register shared memory for Trusted Environment
  *
@@ -406,19 +475,13 @@ static inline int z_impl_tee_invoke_func(const struct device *dev, struct tee_in
  *
  * @retval 0       On success, negative on error
  */
-__syscall int tee_shm_register(const struct device *dev, void *addr, size_t size, uint32_t flags,
-			       struct tee_shm **shm);
+__syscall int tee_shm_register(const struct device *dev, void *addr, size_t size,
+			       uint32_t flags, struct tee_shm **shm);
 
 static inline int z_impl_tee_shm_register(const struct device *dev, void *addr, size_t size,
 					  uint32_t flags, struct tee_shm **shm)
 {
-	const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
-
-	if (api->shm_register == NULL) {
-		return -ENOSYS;
-	}
-
-	return api->shm_register(dev, addr, size, flags, shm);
+	return tee_add_shm(dev, addr, size, flags | ~TEE_SHM_ALLOC | TEE_SHM_REGISTER, shm);
 }
 
 /**
@@ -437,13 +500,7 @@ __syscall int tee_shm_unregister(const struct device *dev, struct tee_shm *shm);
 
 static inline int z_impl_tee_shm_unregister(const struct device *dev, struct tee_shm *shm)
 {
-	const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
-
-	if (api->shm_unregister == NULL) {
-		return -ENOSYS;
-	}
-
-	return api->shm_unregister(dev, shm);
+	return tee_rm_shm(dev, shm);
 }
 
 /**
@@ -454,24 +511,18 @@ static inline int z_impl_tee_shm_unregister(const struct device *dev, struct tee
  * @param dev TEE device
  * @param size Region size
  * @param flags to allocate region
- * @param addr returns
+ * @param shm Return shared memory structure
  *
  * @retval -ENOSYS If callback was not implemented
  *
  * @retval 0       On success, negative on error
  */
-__syscall int tee_shm_alloc(const struct device *dev, size_t size, uint32_t flags, void **addr);
+__syscall int tee_shm_alloc(const struct device *dev, size_t size, uint32_t flags, struct tee_shm **shm);
 
 static inline int z_impl_tee_shm_alloc(const struct device *dev, size_t size, uint32_t flags,
-				       void **addr)
+				       struct tee_shm **shm)
 {
-	const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
-
-	if (api->shm_alloc == NULL) {
-		return -ENOSYS;
-	}
-
-	return api->shm_alloc(dev, size, flags, addr);
+	return tee_add_shm(dev, NULL, size, flags | TEE_SHM_ALLOC | TEE_SHM_REGISTER, shm);
 }
 
 /**
@@ -480,23 +531,17 @@ static inline int z_impl_tee_shm_alloc(const struct device *dev, size_t size, ui
  * Frees shared memory for TEE
  *
  * @param dev TEE device
- * @param addr Shared memory address
+ * @param shm Shared memory structure
  *
  * @retval -ENOSYS If callback was not implemented
  *
  * @retval 0       On success, negative on error
  */
-__syscall int tee_shm_free(const struct device *dev, void *addr);
+__syscall int tee_shm_free(const struct device *dev, struct tee_shm *shm);
 
-static inline int z_impl_tee_shm_free(const struct device *dev, void *addr)
+static inline int z_impl_tee_shm_free(const struct device *dev, struct tee_shm *shm)
 {
-	const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
-
-	if (api->shm_free == NULL) {
-		return -ENOSYS;
-	}
-
-	return api->shm_free(dev, addr);
+	return tee_rm_shm(dev, shm);
 }
 
 /**
