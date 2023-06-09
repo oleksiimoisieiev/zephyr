@@ -8,9 +8,23 @@
 #include <zephyr/drivers/tee.h>
 #include <zephyr/logging/log.h>
 
+#include "optee_msg.h"
+#include "optee_smc.h"
 LOG_MODULE_REGISTER(optee);
 
-#define DT_DRV_COMPAT optee
+#define DT_DRV_COMPAT linaro_optee_tz
+
+// TODO move it to some private header
+
+/*
+ * TEE Implementation ID
+ */
+#define TEE_IMPL_ID_OPTEE 1
+
+/*
+ * OP-TEE specific capabilities
+ */
+#define TEE_OPTEE_CAP_TZ  (1 << 0)
 
 /* Wrapping functions so function pointer can be used */
 static void optee_smccc_smc(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
@@ -35,7 +49,9 @@ static void optee_smccc_test(unsigned long a0, unsigned long a1, unsigned long a
 	arm_smccc_smc(a0, a1, a2, a3, a4, a5, a6, a7, res);
 }
 
-static int optee_call(struct tee_context *ctx; struct optee_msg_arg *arg)
+struct tee_context{};
+
+static int optee_call(struct tee_context *ctx, struct optee_msg_arg *arg)
 {
 	return 0;
 }
@@ -46,9 +62,9 @@ static int optee_get_version(const struct device *dev, struct tee_version_info *
 		return -EINVAL;
 	}
 
-	info.impl_id = TEE_IMPL_ID_OPTEE;
-	info.impl_caps = TEE_OPTEE_CAP_TZ;
-	info.gen_caps = TEE_GEN_CAP_GP;
+	info->impl_id = TEE_IMPL_ID_OPTEE;
+	info->impl_caps = TEE_OPTEE_CAP_TZ;
+	info->gen_caps = TEE_GEN_CAP_GP;
 
 	return 0;
 }
@@ -63,7 +79,7 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 
 	marg.cmd = OPTEE_MSG_CMD_OPEN_SESSION;
 	marg.cancel_id = arg->cancel_id;
-	memcpy(&marg->params[0].u.value, arg->uuid, sizeof(arg->uuid));
+	/* memcpy(&marg.params[0].u.value, arg->uuid, sizeof(arg->uuid)); */
 	marg.params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
 
 	marg.params[1].u.value.c = arg->clnt_login;
@@ -94,10 +110,10 @@ static int optee_invoke_func(const struct device *dev, struct tee_invoke_func_ar
 	struct tee_context *ctx = dev->data;
 	int err;
 
-	marg->cmd = OPTEE_MSG_CMD_INVOKE_COMMAND;
-	marg->func = arg->func;
-	marg->session = arg->session;
-	marg->cancel_id = arg->cancel_id;
+	marg.cmd = OPTEE_MSG_CMD_INVOKE_COMMAND;
+	marg.func = arg->func;
+	marg.session = arg->session;
+	marg.cancel_id = arg->cancel_id;
 
 	err = optee_call(ctx, &marg);
 	if (!err) {
@@ -131,7 +147,7 @@ static int optee_suppl_send(const struct device *dev, unsigned int num_params,
 
 static int optee_init(const struct device *dev)
 {
-
+	printk("====== %s %d\n", __func__, __LINE__);
 	return 0;
 }
 

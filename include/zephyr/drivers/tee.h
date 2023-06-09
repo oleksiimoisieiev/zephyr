@@ -44,6 +44,9 @@ extern "C" {
 #endif
 #define TEE_UUID_LEN 16
 
+#define TEE_GEN_CAP_GP	    BIT(0) /* GlobalPlatform compliant TEE */
+#define TEE_GEN_CAP_REG_MEM BIT(1) /* Supports registering shared memory */
+
 #define TEE_SHM_REGISTER BIT(0)
 #define TEE_SHM_ALLOC BIT(1)
 
