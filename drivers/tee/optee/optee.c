@@ -35,8 +35,21 @@ static void optee_smccc_test(unsigned long a0, unsigned long a1, unsigned long a
 	arm_smccc_smc(a0, a1, a2, a3, a4, a5, a6, a7, res);
 }
 
+static int optee_call(struct tee_context *ctx; struct optee_msg_arg *arg)
+{
+	return 0;
+}
+
 static int optee_get_version(const struct device *dev, struct tee_version_info *info)
 {
+	if (!info) {
+		return -EINVAL;
+	}
+
+	info.impl_id = TEE_IMPL_ID_OPTEE;
+	info.impl_caps = TEE_OPTEE_CAP_TZ;
+	info.gen_caps = TEE_GEN_CAP_GP;
+
 	return 0;
 }
 
@@ -44,6 +57,23 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 			      unsigned int num_param, struct tee_param *param,
 			      uint32_t *session_id)
 {
+	struct optee_msg_arg marg;
+	struct tee_context *ctx = dev->data;
+	int err;
+
+	marg.cmd = OPTEE_MSG_CMD_OPEN_SESSION;
+	marg.cancel_id = arg->cancel_id;
+	memcpy(&marg->params[0].u.value, arg->uuid, sizeof(arg->uuid));
+	marg.params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
+
+	marg.params[1].u.value.c = arg->clnt_login;
+	marg.params[1].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
+
+	err = optee_call(ctx, &marg);
+	if (!err) {
+		return err;
+	}
+
 	return 0;
 }
 
@@ -60,6 +90,19 @@ static int optee_cancel(const struct device *dev, uint32_t session_id, uint32_t 
 static int optee_invoke_func(const struct device *dev, struct tee_invoke_func_arg *arg,
 			      unsigned int num_param, struct tee_param *param)
 {
+	struct optee_msg_arg marg;
+	struct tee_context *ctx = dev->data;
+	int err;
+
+	marg->cmd = OPTEE_MSG_CMD_INVOKE_COMMAND;
+	marg->func = arg->func;
+	marg->session = arg->session;
+	marg->cancel_id = arg->cancel_id;
+
+	err = optee_call(ctx, &marg);
+	if (!err) {
+		return err;
+	}
 	return 0;
 }
 
