@@ -50,6 +50,17 @@ extern "C" {
 #define TEE_SHM_REGISTER BIT(0)
 #define TEE_SHM_ALLOC BIT(1)
 
+#define TEE_PARAM_ATTR_TYPE_NONE	  0 /* parameter not used */
+#define TEE_PARAM_ATTR_TYPE_VALUE_INPUT	  1
+#define TEE_PARAM_ATTR_TYPE_VALUE_OUTPUT  2
+#define TEE_PARAM_ATTR_TYPE_VALUE_INOUT	  3 /* input and output */
+#define TEE_PARAM_ATTR_TYPE_MEMREF_INPUT  5
+#define TEE_PARAM_ATTR_TYPE_MEMREF_OUTPUT 6
+#define TEE_PARAM_ATTR_TYPE_MEMREF_INOUT  7 /* input and output */
+#define TEE_PARAM_ATTR_TYPE_MASK	  0xff
+#define TEE_PARAM_ATTR_META		  0x100
+#define TEE_PARAM_ATTR_MASK		  (TEE_PARAM_ATTR_TYPE_MASK | TEE_PARAM_ATTR_META)
+
 /**
  * @brief TEE version
  * @impl_id:	[out] TEE implementation id
