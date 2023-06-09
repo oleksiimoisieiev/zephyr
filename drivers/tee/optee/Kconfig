@@ -1,0 +1,8 @@
+# Copyright (c) 2023 Epam Systems
+# SPDX-License-Identifier: Apache-2.0
+
+config OPTEE
+	bool "Enable optee driver in system"
+	depends on TEE
+	help
+	  Enable OPTEE connection driver in the system
