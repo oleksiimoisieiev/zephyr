@@ -46,12 +46,117 @@ static void optee_smccc_test(unsigned long a0, unsigned long a1, unsigned long a
 			     unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
 			     struct arm_smccc_res *res)
 {
-	arm_smccc_smc(a0, a1, a2, a3, a4, a5, a6, a7, res);
+
 }
 
 struct tee_context{};
 
-static int optee_call(struct tee_context *ctx, struct optee_msg_arg *arg)
+static int param_to_msg_param(const struct tee_param *param, unsigned int num_param,
+			      struct optee_msg_param *msg_param)
+{
+	int i;
+	const struct tee_param *tp = param;
+	struct optee_msg_param *mtp = msg_param;
+
+	if (!param || !msg_param) {
+		return -EINVAL;
+	}
+
+	for (i = 0; i < num_param; i++, tp++, mtp++) {
+		if (!tp || !mtp) {
+			LOG_ERR("Wrong param on %d iteration", i);
+			return -EINVAL;
+		}
+
+		switch (tp->attr) {
+		case TEE_PARAM_ATTR_TYPE_NONE:
+			mtp->attr = OPTEE_MSG_ATTR_TYPE_NONE;
+			memset(&mtp->u, 0, sizeof(mtp->u));
+			break;
+		case TEE_PARAM_ATTR_TYPE_VALUE_INPUT:
+		case TEE_PARAM_ATTR_TYPE_VALUE_OUTPUT:
+		case TEE_PARAM_ATTR_TYPE_VALUE_INOUT:
+			mtp->attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT + tp->attr -
+				TEE_PARAM_ATTR_TYPE_VALUE_INPUT;
+			mtp->u.value.a = tp->a;
+			mtp->u.value.b = tp->b;
+			mtp->u.value.c = tp->c;
+			break;
+		case TEE_PARAM_ATTR_TYPE_MEMREF_INPUT:
+		case TEE_PARAM_ATTR_TYPE_MEMREF_OUTPUT:
+		case TEE_PARAM_ATTR_TYPE_MEMREF_INOUT:
+			mtp->attr = OPTEE_MSG_ATTR_TYPE_RMEM_INPUT + tp->attr -
+				TEE_PARAM_ATTR_TYPE_MEMREF_INPUT;
+			mtp->u.rmem.shm_ref = tp->c;
+			mtp->u.rmem.size = tp->b;
+			mtp->u.rmem.offs = tp->a;
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+static int msg_param_to_param(struct tee_param *param, unsigned int num_param,
+			      const struct optee_msg_param *msg_param)
+{
+	int i;
+	struct tee_param *tp = param;
+	const struct optee_msg_param *mtp = msg_param;
+
+	if (!param || !msg_param) {
+		return -EINVAL;
+	}
+
+	for (i = 0; i < num_param; i++, tp++, mtp++) {
+		uint32_t attr = mtp->attr & OPTEE_MSG_ATTR_TYPE_MASK;
+
+		if (!tp || !mtp) {
+			LOG_ERR("Wrong param on %d iteration", i);
+			return -EINVAL;
+		}
+
+		switch (attr) {
+		case OPTEE_MSG_ATTR_TYPE_NONE:
+			memset(tp, 0, sizeof(*tp));
+			tp->attr = TEE_PARAM_ATTR_TYPE_NONE;
+			break;
+		case OPTEE_MSG_ATTR_TYPE_VALUE_INPUT:
+		case OPTEE_MSG_ATTR_TYPE_VALUE_OUTPUT:
+		case OPTEE_MSG_ATTR_TYPE_VALUE_INOUT:
+			tp->attr = TEE_PARAM_ATTR_TYPE_VALUE_INOUT + attr -
+				OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
+			tp->a = mtp->u.value.a;
+			tp->b = mtp->u.value.b;
+			tp->c = mtp->u.value.c;
+			break;
+		case OPTEE_MSG_ATTR_TYPE_RMEM_INPUT:
+		case OPTEE_MSG_ATTR_TYPE_RMEM_OUTPUT:
+		case OPTEE_MSG_ATTR_TYPE_RMEM_INOUT:
+			tp->attr = TEE_PARAM_ATTR_TYPE_MEMREF_INPUT + attr -
+				OPTEE_MSG_ATTR_TYPE_RMEM_INPUT;
+			tp->b = mtp->u.rmem.size;
+
+			if (!mtp->u.rmem.shm_ref) {
+				tp->a = 0;
+				tp->c = 0;
+				break;
+			}
+
+			tp->a = mtp->u.rmem.offs;
+			tp->c = mtp->u.rmem.shm_ref;
+			break;
+		default:
+			return -EINVAL;
+		}
+	}
+
+	return 0;
+}
+
+static int optee_call(const struct device *dev, struct optee_msg_arg *arg)
 {
 	return 0;
 }
@@ -73,24 +178,56 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 			      unsigned int num_param, struct tee_param *param,
 			      uint32_t *session_id)
 {
-	struct optee_msg_arg marg;
-	struct tee_context *ctx = dev->data;
-	int err;
+	int rc;
+	struct tee_shm *shm;
+	struct optee_msg_arg *marg;
+	/* struct tee_context *ctx = dev->data; */
 
-	marg.cmd = OPTEE_MSG_CMD_OPEN_SESSION;
-	marg.cancel_id = arg->cancel_id;
-	/* memcpy(&marg.params[0].u.value, arg->uuid, sizeof(arg->uuid)); */
-	marg.params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
-
-	marg.params[1].u.value.c = arg->clnt_login;
-	marg.params[1].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
-
-	err = optee_call(ctx, &marg);
-	if (!err) {
-		return err;
+	rc = tee_add_shm(dev, NULL, /* OPTEE_MSG_NONCONTIG_PAGE_SIZE, TODO should I pass this size here?*/
+			 OPTEE_MSG_GET_ARG_SIZE(num_param), TEE_SHM_ALLOC, &shm);
+	if (rc) {
+		LOG_ERR("Unable to get shared memory, rc = %d", rc);
+		return rc;
 	}
 
-	return 0;
+	marg = shm->addr;
+	memset(marg, 0, OPTEE_MSG_GET_ARG_SIZE(num_param));
+
+	marg->num_params = num_param + 2;
+	marg->cmd = OPTEE_MSG_CMD_OPEN_SESSION;
+	marg->params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
+	marg->params[1].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT | OPTEE_MSG_ATTR_META;
+
+	memcpy(&marg->params[0].u.value, arg->uuid, sizeof(arg->uuid));
+	memcpy(&marg->params[1].u.value, arg->uuid, sizeof(arg->clnt_uuid));
+
+	marg->params[1].u.value.c = arg->clnt_login;
+
+	rc = param_to_msg_param(param, num_param, marg->params + 2);
+	// todo amoi write to msg
+	if (rc) {
+		goto out;
+	}
+
+	arg->ret = optee_call(dev, marg);
+	if (arg->ret) {
+		arg->ret_origin = TEEC_ORIGIN_COMMS;
+		goto out;
+	}
+
+	rc = msg_param_to_param(param, num_param, marg->params);
+	if (rc) {
+		arg->ret = TEEC_ERROR_COMMUNICATION;
+		arg->ret_origin = TEEC_ORIGIN_COMMS;
+		goto out;
+	}
+
+	arg->ret = marg->ret;
+	arg->ret_origin = marg->ret_origin;
+out:
+	//todo handle return code
+	tee_rm_shm(dev, shm);
+	return rc;
 }
 
 static int optee_close_session(const struct device *dev, uint32_t session_id)
@@ -107,7 +244,7 @@ static int optee_invoke_func(const struct device *dev, struct tee_invoke_func_ar
 			      unsigned int num_param, struct tee_param *param)
 {
 	struct optee_msg_arg marg;
-	struct tee_context *ctx = dev->data;
+	/* struct tee_context *ctx = dev->data; */
 	int err;
 
 	marg.cmd = OPTEE_MSG_CMD_INVOKE_COMMAND;
@@ -115,7 +252,7 @@ static int optee_invoke_func(const struct device *dev, struct tee_invoke_func_ar
 	marg.session = arg->session;
 	marg.cancel_id = arg->cancel_id;
 
-	err = optee_call(ctx, &marg);
+	err = optee_call(dev, &marg);
 	if (!err) {
 		return err;
 	}
