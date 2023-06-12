@@ -30,7 +30,7 @@
 #define OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT		U(0xa)
 #define OPTEE_MSG_ATTR_TYPE_TMEM_INOUT		U(0xb)
 
-#define OPTEE_MSG_ATTR_TYPE_MASK		GENMASK_32(7, 0)
+#define OPTEE_MSG_ATTR_TYPE_MASK		GENMASK(7, 0)
 
 /*
  * Meta parameter to be absorbed by the Secure OS and not passed
@@ -76,7 +76,7 @@
  * bearer of this protocol OPTEE_SMC_SHM_* is used for values.
  */
 #define OPTEE_MSG_ATTR_CACHE_SHIFT		U(16)
-#define OPTEE_MSG_ATTR_CACHE_MASK		GENMASK_32(2, 0)
+#define OPTEE_MSG_ATTR_CACHE_MASK		GENMASK(2, 0)
 #define OPTEE_MSG_ATTR_CACHE_PREDEFINED		U(0)
 
 /*
