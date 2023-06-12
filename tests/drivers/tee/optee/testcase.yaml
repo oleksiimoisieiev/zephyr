@@ -1,0 +1,8 @@
+tests:
+  drivers.tee.optee:
+    build_only: false
+    tags: tee
+    timeout: 500
+    integration_platforms:
+      - native_posix_64
+    platform_allow: native_posix_64
