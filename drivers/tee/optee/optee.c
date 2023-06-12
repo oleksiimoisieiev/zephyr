@@ -26,6 +26,14 @@ LOG_MODULE_REGISTER(optee);
  */
 #define TEE_OPTEE_CAP_TZ  (1 << 0)
 
+typedef void (*smc_call_t)(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
+			   unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
+			   struct arm_smccc_res *res);
+
+static struct optee_driver_data {
+	smc_call_t smc_call;
+} optee_data;
+
 /* Wrapping functions so function pointer can be used */
 static void optee_smccc_smc(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
 			    unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
@@ -40,16 +48,6 @@ static void optee_smccc_hvc(unsigned long a0, unsigned long a1, unsigned long a2
 {
 	arm_smccc_hvc(a0, a1, a2, a3, a4, a5, a6, a7, res);
 }
-
-//TODO add ifdefs and some callback to run from the unit tests
-static void optee_smccc_test(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
-			     unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
-			     struct arm_smccc_res *res)
-{
-
-}
-
-struct tee_context{};
 
 static int param_to_msg_param(const struct tee_param *param, unsigned int num_param,
 			      struct optee_msg_param *msg_param)
@@ -158,6 +156,8 @@ static int msg_param_to_param(struct tee_param *param, unsigned int num_param,
 
 static int optee_call(const struct device *dev, struct optee_msg_arg *arg)
 {
+	struct optee_driver_data *data = (struct optee_driver_data *)dev->data;
+
 	return 0;
 }
 
@@ -174,17 +174,26 @@ static int optee_get_version(const struct device *dev, struct tee_version_info *
 	return 0;
 }
 
+static int optee_close_session(const struct device *dev, uint32_t session_id)
+{
+	return 0;
+}
+
 static int optee_open_session(const struct device *dev, struct tee_open_session_arg *arg,
 			      unsigned int num_param, struct tee_param *param,
 			      uint32_t *session_id)
 {
-	int rc;
+	int rc, ret;
 	struct tee_shm *shm;
 	struct optee_msg_arg *marg;
-	/* struct tee_context *ctx = dev->data; */
 
-	rc = tee_add_shm(dev, NULL, /* OPTEE_MSG_NONCONTIG_PAGE_SIZE, TODO should I pass this size here?*/
-			 OPTEE_MSG_GET_ARG_SIZE(num_param), TEE_SHM_ALLOC, &shm);
+	if (!arg || !session_id) {
+		return -EINVAL;
+	}
+
+	/* OPTEE_MSG_NONCONTIG_PAGE_SIZE, TODO should I pass this size here?*/
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_GET_ARG_SIZE(num_param),
+			 TEE_SHM_ALLOC, &shm);
 	if (rc) {
 		LOG_ERR("Unable to get shared memory, rc = %d", rc);
 		return rc;
@@ -204,7 +213,6 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 	marg->params[1].u.value.c = arg->clnt_login;
 
 	rc = param_to_msg_param(param, num_param, marg->params + 2);
-	// todo amoi write to msg
 	if (rc) {
 		goto out;
 	}
@@ -219,20 +227,28 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 	if (rc) {
 		arg->ret = TEEC_ERROR_COMMUNICATION;
 		arg->ret_origin = TEEC_ORIGIN_COMMS;
+		/*
+		 * Ret is needed here only to print an error. Param conversion error
+		 * should be returned from the function.
+		 */
+		ret = optee_close_session(dev, marg->session);
+		if (ret) {
+			LOG_ERR("Unable to close session: %d", ret);
+		}
 		goto out;
 	}
+
+	*session_id = marg->session;
 
 	arg->ret = marg->ret;
 	arg->ret_origin = marg->ret_origin;
 out:
-	//todo handle return code
-	tee_rm_shm(dev, shm);
-	return rc;
-}
+	ret = tee_rm_shm(dev, shm);
+	if (ret) {
+		LOG_ERR("Unable to free shared memory");
+	}
 
-static int optee_close_session(const struct device *dev, uint32_t session_id)
-{
-	return 0;
+	return (rc) ? rc : ret;
 }
 
 static int optee_cancel(const struct device *dev, uint32_t session_id, uint32_t cancel_id)
@@ -282,9 +298,32 @@ static int optee_suppl_send(const struct device *dev, unsigned int num_params,
 	return 0;
 }
 
+static int set_optee_method(void)
+{
+	const char *method;
+
+	method = DT_PROP(DT_INST(0, DT_DRV_COMPAT), method);
+
+	if (!strcmp("hvc", method)) {
+		optee_data.smc_call = optee_smccc_hvc;
+	} else if (!strcmp("smc", method)) {
+		optee_data.smc_call = optee_smccc_smc;
+	} else {
+		LOG_ERR("Invalid smc_call method");
+		return -EINVAL;
+	}
+
+	return 0;
+}
+
 static int optee_init(const struct device *dev)
 {
-	printk("====== %s %d\n", __func__, __LINE__);
+	printk("=============== %s %d\n", __func__, __LINE__);
+
+	if (set_optee_method()) {
+		return -ENOTSUP;
+	}
+
 	return 0;
 }
 
@@ -300,5 +339,5 @@ static const struct tee_driver_api optee_driver_api = {
 	.suppl_send = optee_suppl_send,
 };
 
-DEVICE_DT_INST_DEFINE(0, optee_init, NULL, NULL, NULL, POST_KERNEL,
+DEVICE_DT_INST_DEFINE(0, optee_init, NULL, &optee_data, NULL, POST_KERNEL,
 		      CONFIG_KERNEL_INIT_PRIORITY_DEVICE, &optee_driver_api);
