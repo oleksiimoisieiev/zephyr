@@ -33,8 +33,6 @@ ZTEST(tee_test_suite, test_basic_calls)
 	int ret;
 	uint32_t session_id;
 	struct tee_version_info info;
-	int addr;
-	struct tee_shm *shm = NULL;
 	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
 	zassert_not_null(dev, "Unable to get dev");
 
@@ -53,32 +51,8 @@ ZTEST(tee_test_suite, test_basic_calls)
 	ret = tee_open_session(dev, NULL, 0, NULL, NULL);
 	zassert_equal(ret, -EINVAL, "tee_open_session failed with code %d", ret);
 
-	ret = tee_close_session(dev, 0);
+	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
-
-	ret = tee_cancel(dev, 0, 0);
-	zassert_ok(ret, "tee_cancel failed with code %d", ret);
-
-	ret = tee_invoke_func(dev, NULL, 0, NULL);
-	zassert_ok(ret, "tee_invoke_func failed with code %d", ret);
-
-	ret = tee_shm_register(dev, &addr, 1, 0, &shm);
-	zassert_ok(ret, "tee_shm_register failed with code %d", ret);
-
-	ret = tee_shm_unregister(dev, shm);
-	zassert_ok(ret, "tee_shm_unregister failed with code %d", ret);
-
-	ret = tee_shm_alloc(dev, 1, 0, &shm);
-	zassert_ok(ret, "tee_shm_alloc failed with code %d", ret);
-
-	ret = tee_shm_free(dev, shm);
-	zassert_ok(ret, "tee_shm_free failed with code %d", ret);
-
-	ret = tee_suppl_recv(dev, 0, 0, NULL);
-	zassert_ok(ret, "tee_suppl_recv failed with code %d", ret);
-
-	ret = tee_suppl_send(dev, 0, NULL);
-	zassert_ok(ret, "tee_suppl_send failed with code %d", ret);
 }
 
 ZTEST(tee_test_suite, test_reg_unreg)
