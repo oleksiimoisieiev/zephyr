@@ -14,8 +14,6 @@ LOG_MODULE_REGISTER(optee);
 
 #define DT_DRV_COMPAT linaro_optee_tz
 
-// TODO move it to some private header
-
 /*
  * TEE Implementation ID
  */
@@ -252,7 +250,8 @@ static int optee_close_session(const struct device *dev, uint32_t session_id)
 	struct tee_shm *shm;
 	struct optee_msg_arg *marg;
 
-	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE, 0,
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE,
+			 OPTEE_MSG_GET_ARG_SIZE(0),
 			 TEE_SHM_ALLOC, &shm);
 	if (rc) {
 		LOG_ERR("Unable to get shared memory, rc = %d", rc);
@@ -347,26 +346,87 @@ out:
 
 static int optee_cancel(const struct device *dev, uint32_t session_id, uint32_t cancel_id)
 {
-	return 0;
+	int rc;
+	struct tee_shm *shm;
+	struct optee_msg_arg *marg;
+
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE,
+			 OPTEE_MSG_GET_ARG_SIZE(0),
+			 TEE_SHM_ALLOC, &shm);
+	if (rc) {
+		LOG_ERR("Unable to get shared memory, rc = %d", rc);
+		return rc;
+	}
+
+	marg = shm->addr;
+	marg->num_params = 0;
+	marg->cmd = OPTEE_MSG_CMD_CANCEL;
+	marg->cancel_id = cancel_id;
+	marg->session = session_id;
+
+	rc = optee_call(dev, marg);
+
+	if (tee_rm_shm(dev, shm)) {
+		LOG_ERR("Unable to free shared memory");
+	}
+
+	return rc;
 }
 
 static int optee_invoke_func(const struct device *dev, struct tee_invoke_func_arg *arg,
 			      unsigned int num_param, struct tee_param *param)
 {
-	struct optee_msg_arg marg;
-	/* struct tee_context *ctx = dev->data; */
-	int err;
+	int rc, ret;
+	struct tee_shm *shm;
+	struct optee_msg_arg *marg;
 
-	marg.cmd = OPTEE_MSG_CMD_INVOKE_COMMAND;
-	marg.func = arg->func;
-	marg.session = arg->session;
-	marg.cancel_id = arg->cancel_id;
-
-	err = optee_call(dev, &marg);
-	if (!err) {
-		return err;
+	if (!arg) {
+		return -EINVAL;
 	}
-	return 0;
+
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE,
+			 OPTEE_MSG_GET_ARG_SIZE(num_param),
+			 TEE_SHM_ALLOC, &shm);
+	if (rc) {
+		LOG_ERR("Unable to get shared memory, rc = %d", rc);
+		return rc;
+	}
+
+	marg = shm->addr;
+	memset(marg, 0, OPTEE_MSG_GET_ARG_SIZE(num_param));
+
+	marg->num_params = num_param;
+	marg->cmd = OPTEE_MSG_CMD_INVOKE_COMMAND;
+	marg->func = arg->func;
+	marg->session = arg->session;
+
+	rc = param_to_msg_param(param, num_param, marg->params);
+	if (rc) {
+		goto out;
+	}
+
+	arg->ret = optee_call(dev, marg);
+	if (arg->ret) {
+		arg->ret_origin = TEEC_ORIGIN_COMMS;
+		goto out;
+	}
+
+	rc = msg_param_to_param(param, num_param, marg->params);
+	if (rc) {
+		arg->ret = TEEC_ERROR_COMMUNICATION;
+		arg->ret_origin = TEEC_ORIGIN_COMMS;
+		goto out;
+	}
+
+	arg->ret = marg->ret;
+	arg->ret_origin = marg->ret_origin;
+out:
+	ret = tee_rm_shm(dev, shm);
+	if (ret) {
+		LOG_ERR("Unable to free shared memory");
+	}
+
+	return (rc) ? rc : ret;
 }
 
 static int optee_shm_register(const struct device *dev, void *addr, size_t size, uint32_t flags,
@@ -412,8 +472,6 @@ static int set_optee_method(void)
 
 static int optee_init(const struct device *dev)
 {
-	printk("=============== %s %d\n", __func__, __LINE__);
-
 	if (set_optee_method()) {
 		return -ENOTSUP;
 	}
