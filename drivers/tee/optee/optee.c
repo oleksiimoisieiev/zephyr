@@ -181,7 +181,8 @@ static void handle_rpc_call(const struct device *dev, struct optee_rpc_param *pa
 
 	switch (OPTEE_SMC_RETURN_GET_RPC_FUNC(param->a0)) {
 	case OPTEE_SMC_RPC_FUNC_ALLOC:
-		if (!tee_add_shm(dev, NULL, param->a1,
+		if (!tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE,
+				 param->a1,
 				 TEE_SHM_ALLOC | TEE_SHM_REGISTER, &shm)) {
 			u64_to_regs((uint64_t)shm->addr, &param->a1, &param->a2);
 			u64_to_regs((uint64_t)shm, &param->a4, &param->a5);
@@ -247,7 +248,29 @@ static int optee_get_version(const struct device *dev, struct tee_version_info *
 
 static int optee_close_session(const struct device *dev, uint32_t session_id)
 {
-	return 0;
+	int rc;
+	struct tee_shm *shm;
+	struct optee_msg_arg *marg;
+
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE, 0,
+			 TEE_SHM_ALLOC, &shm);
+	if (rc) {
+		LOG_ERR("Unable to get shared memory, rc = %d", rc);
+		return rc;
+	}
+
+	marg = shm->addr;
+	marg->num_params = 0;
+	marg->cmd = OPTEE_MSG_CMD_CLOSE_SESSION;
+	marg->session = session_id;
+
+	rc = optee_call(dev, marg);
+
+	if (tee_rm_shm(dev, shm)) {
+		LOG_ERR("Unable to free shared memory");
+	}
+
+	return rc;
 }
 
 static int optee_open_session(const struct device *dev, struct tee_open_session_arg *arg,
@@ -262,8 +285,8 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 		return -EINVAL;
 	}
 
-	/* OPTEE_MSG_NONCONTIG_PAGE_SIZE, TODO should I pass this size here?*/
-	rc = tee_add_shm(dev, NULL, OPTEE_MSG_GET_ARG_SIZE(num_param + 2),
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE,
+			 OPTEE_MSG_GET_ARG_SIZE(num_param + 2),
 			 TEE_SHM_ALLOC, &shm);
 	if (rc) {
 		LOG_ERR("Unable to get shared memory, rc = %d", rc);
