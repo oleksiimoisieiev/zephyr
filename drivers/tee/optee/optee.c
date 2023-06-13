@@ -26,6 +26,16 @@ LOG_MODULE_REGISTER(optee);
  */
 #define TEE_OPTEE_CAP_TZ  (1 << 0)
 
+struct optee_rpc_param {
+	uint32_t a0;
+	uint32_t a1;
+	uint32_t a2;
+	uint32_t a3;
+	uint32_t a4;
+	uint32_t a5;
+	uint32_t a6;
+	uint32_t a7;
+};
 typedef void (*smc_call_t)(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
 			   unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
 			   struct arm_smccc_res *res);
@@ -154,11 +164,72 @@ static int msg_param_to_param(struct tee_param *param, unsigned int num_param,
 	return 0;
 }
 
+static uint64_t regs_to_u64(uint32_t reg0, uint32_t reg1)
+{
+	return (uint64_t)(((uint64_t)reg0 << 32) | reg1);
+}
+
+static void u64_to_regs(uint64_t val, uint32_t *reg0, uint32_t *reg1)
+{
+	*reg0 = val >> 32;
+	*reg1 = val;
+}
+
+static void handle_rpc_call(const struct device *dev, struct optee_rpc_param *param)
+{
+	struct tee_shm *shm = NULL;
+
+	switch (OPTEE_SMC_RETURN_GET_RPC_FUNC(param->a0)) {
+	case OPTEE_SMC_RPC_FUNC_ALLOC:
+		if (!tee_add_shm(dev, NULL, param->a1,
+				 TEE_SHM_ALLOC | TEE_SHM_REGISTER, &shm)) {
+			u64_to_regs((uint64_t)shm->addr, &param->a1, &param->a2);
+			u64_to_regs((uint64_t)shm, &param->a4, &param->a5);
+		} else {
+			param->a1 = 0;
+			param->a2 = 0;
+			param->a4 = 0;
+			param->a5 = 0;
+		}
+		break;
+	case OPTEE_SMC_RPC_FUNC_FREE:
+		shm = (struct tee_shm *)regs_to_u64(param->a1, param->a2);
+		tee_rm_shm(dev, shm);
+		break;
+	case OPTEE_SMC_RPC_FUNC_FOREIGN_INTR:
+		/* TODO: We do not support IRQ handler for now */
+		break;
+	case OPTEE_SMC_RPC_FUNC_CMD:
+		/* TODO: Tee supplicatnt function should be called here */
+		break;
+	default:
+		break;
+	}
+
+	param->a0 = OPTEE_SMC_CALL_RETURN_FROM_RPC;
+}
+
 static int optee_call(const struct device *dev, struct optee_msg_arg *arg)
 {
 	struct optee_driver_data *data = (struct optee_driver_data *)dev->data;
+	struct optee_rpc_param rpc_param = {
+		.a0 = OPTEE_SMC_CALL_WITH_ARG
+	};
 
-	return 0;
+	u64_to_regs((uint64_t)arg, &rpc_param.a0, &rpc_param.a1);
+	while (true) {
+		struct arm_smccc_res res;
+
+		data->smc_call(rpc_param.a0, rpc_param.a1, rpc_param.a2, rpc_param.a3,
+			       rpc_param.a4, rpc_param.a5, rpc_param.a6, rpc_param.a7, &res);
+
+		if (OPTEE_SMC_RETURN_IS_RPC(res.a0)) {
+			handle_rpc_call(dev, &rpc_param);
+		} else {
+			return res.a0 == OPTEE_SMC_RETURN_OK ? TEEC_SUCCESS :
+				TEEC_ERROR_BAD_PARAMETERS;
+		}
+	}
 }
 
 static int optee_get_version(const struct device *dev, struct tee_version_info *info)
