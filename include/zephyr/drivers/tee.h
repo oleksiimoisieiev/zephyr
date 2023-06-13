@@ -486,19 +486,23 @@ static inline int z_impl_tee_invoke_func(const struct device *dev, struct tee_in
 	return api->invoke_func(dev, arg, num_param, param);
 }
 
-static inline int tee_add_shm(const struct device *dev, void *addr, size_t size, uint32_t flags,
-			      struct tee_shm **shmp)
+static inline int tee_add_shm(const struct device *dev, void *addr, size_t align,  size_t size,
+			      uint32_t flags, struct tee_shm **shmp)
 {
 	int rc;
 	void *p = addr;
 	struct tee_shm *shm;
 
-	if (!shmp || !size) {
+	if (!shmp) {
 		return -EINVAL;
 	}
 
 	if (flags & TEE_SHM_ALLOC) {
-		p = k_malloc(size);
+		if (align) {
+			p = k_aligned_alloc(align, size);
+		} else {
+			p = k_malloc(size);
+		}
 	}
 
 	if (!p) {
@@ -592,7 +596,7 @@ __syscall int tee_shm_register(const struct device *dev, void *addr, size_t size
 static inline int z_impl_tee_shm_register(const struct device *dev, void *addr, size_t size,
 					  uint32_t flags, struct tee_shm **shm)
 {
-	return tee_add_shm(dev, addr, size, flags | ~TEE_SHM_ALLOC | TEE_SHM_REGISTER, shm);
+	return tee_add_shm(dev, addr, 0, size, flags | ~TEE_SHM_ALLOC | TEE_SHM_REGISTER, shm);
 }
 
 /**
@@ -633,7 +637,7 @@ __syscall int tee_shm_alloc(const struct device *dev, size_t size, uint32_t flag
 static inline int z_impl_tee_shm_alloc(const struct device *dev, size_t size, uint32_t flags,
 				       struct tee_shm **shm)
 {
-	return tee_add_shm(dev, NULL, size, flags | TEE_SHM_ALLOC | TEE_SHM_REGISTER, shm);
+	return tee_add_shm(dev, NULL, 0, size, flags | TEE_SHM_ALLOC | TEE_SHM_REGISTER, shm);
 }
 
 /**
