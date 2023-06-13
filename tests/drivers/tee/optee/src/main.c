@@ -5,9 +5,9 @@
  */
 
 /**
- * @addtogroup optee_driver
+ * @addtogroup t_optee_driver
  * @{
- * @defgroup t_tee_driver test_optee_driver
+ * @defgroup t_optee_driver test_optee_driver
  * @}
  */
 
@@ -48,7 +48,7 @@ void arm_smccc_smc(unsigned long a0, unsigned long a1, unsigned long a2, unsigne
 	}
 }
 
-ZTEST(tee_test_suite, test_get_version)
+ZTEST(optee_test_suite, test_get_version)
 {
 	int ret;
 	struct tee_version_info info;
@@ -84,8 +84,14 @@ void fast_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned lo
 	res->a0 = OPTEE_SMC_RETURN_OK;
 }
 
+void fail_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
+	       unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
+	       struct arm_smccc_res *res)
+{
+	res->a0 = OPTEE_SMC_RETURN_EBUSY;
+}
 
-ZTEST(tee_test_suite, test_fast_calls)
+ZTEST(optee_test_suite, test_fast_calls)
 {
 	int ret;
 	uint32_t session_id;
@@ -112,6 +118,77 @@ ZTEST(tee_test_suite, test_fast_calls)
 	param.a = 3333;
 	ret = tee_open_session(dev, &arg, 1, &param, &session_id);
 	zassert_ok(ret, "tee_open_session failed with code %d", ret);
+
+	ret = tee_close_session(dev, session_id);
+	zassert_ok(ret, "close_session failed with code %d", ret);
+}
+
+ZTEST(optee_test_suite, test_invoke_fn)
+{
+	int ret;
+	uint32_t session_id;
+	struct tee_open_session_arg arg = {};
+	struct tee_invoke_func_arg invoke_arg = {};
+	struct tee_param param = {};
+	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
+	zassert_not_null(dev, "Unable to get dev");
+
+	t_call.num = 0;
+	t_call.smc_cb = fast_call;
+
+	// Fail pass
+	ret = tee_invoke_func(dev, NULL, 0, NULL);
+	zassert_equal(ret, -EINVAL, "tee_invoke_fn failed with code %d", ret);
+
+	t_call.smc_cb = fail_call;
+
+	invoke_arg.func = 12;
+	invoke_arg.session = 1;
+	ret = tee_invoke_func(dev, &invoke_arg, 0, NULL);
+	zassert_equal(ret, -EINVAL, "tee_invoke_fn failed with code %d", ret);
+
+	t_call.smc_cb = fast_call;
+
+	// Happy pass
+	arg.uuid[0] = 111;
+	arg.clnt_uuid[0] = 222;
+	arg.clnt_login = TEEC_LOGIN_PUBLIC;
+	param.attr = TEE_PARAM_ATTR_TYPE_NONE;
+	param.a = 3333;
+	ret = tee_open_session(dev, &arg, 1, &param, &session_id);
+	zassert_ok(ret, "tee_open_session failed with code %d", ret);
+
+	invoke_arg.func = 12;
+	invoke_arg.session = 1;
+	ret = tee_invoke_func(dev, &invoke_arg, 1, &param);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+
+	ret = tee_close_session(dev, session_id);
+	zassert_ok(ret, "close_session failed with code %d", ret);
+}
+
+ZTEST(optee_test_suite, test_cancel)
+{
+	int ret;
+	uint32_t session_id;
+	struct tee_open_session_arg arg = {};
+	struct tee_param param = {};
+	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
+	zassert_not_null(dev, "Unable to get dev");
+
+	t_call.num = 0;
+	t_call.smc_cb = fast_call;
+
+	arg.uuid[0] = 111;
+	arg.clnt_uuid[0] = 222;
+	arg.clnt_login = TEEC_LOGIN_PUBLIC;
+	param.attr = TEE_PARAM_ATTR_TYPE_NONE;
+	param.a = 3333;
+	ret = tee_open_session(dev, &arg, 1, &param, &session_id);
+	zassert_ok(ret, "tee_open_session failed with code %d", ret);
+
+	ret = tee_cancel(dev, 1, 25);
+	zassert_ok(ret, "tee_cancel failed with code %d", ret);
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
@@ -158,7 +235,7 @@ void normal_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned 
 
 	t_call.num++;
 }
-ZTEST(tee_test_suite, test_normal_calls)
+ZTEST(optee_test_suite, test_normal_calls)
 {
 	int ret;
 	uint32_t session_id;
@@ -184,7 +261,7 @@ ZTEST(tee_test_suite, test_normal_calls)
 	zassert_ok(ret, "close_session failed with code %d", ret);
 }
 
-ZTEST(tee_test_suite, test_reg_unreg)
+ZTEST(optee_test_suite, test_reg_unreg)
 {
 	int ret;
 	int addr;
@@ -222,4 +299,4 @@ ZTEST(tee_test_suite, test_reg_unreg)
 	zassert_ok(ret, "tee_shm_free failed with code %d", ret);
 }
 
-ZTEST_SUITE(tee_test_suite, NULL, NULL, NULL, NULL, NULL);
+ZTEST_SUITE(optee_test_suite, NULL, NULL, NULL, NULL, NULL);
