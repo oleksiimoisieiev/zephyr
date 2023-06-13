@@ -263,7 +263,7 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 	}
 
 	/* OPTEE_MSG_NONCONTIG_PAGE_SIZE, TODO should I pass this size here?*/
-	rc = tee_add_shm(dev, NULL, OPTEE_MSG_GET_ARG_SIZE(num_param),
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_GET_ARG_SIZE(num_param + 2),
 			 TEE_SHM_ALLOC, &shm);
 	if (rc) {
 		LOG_ERR("Unable to get shared memory, rc = %d", rc);
@@ -271,7 +271,7 @@ static int optee_open_session(const struct device *dev, struct tee_open_session_
 	}
 
 	marg = shm->addr;
-	memset(marg, 0, OPTEE_MSG_GET_ARG_SIZE(num_param));
+	memset(marg, 0, OPTEE_MSG_GET_ARG_SIZE(num_param + 2));
 
 	marg->num_params = num_param + 2;
 	marg->cmd = OPTEE_MSG_CMD_OPEN_SESSION;
