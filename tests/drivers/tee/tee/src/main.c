@@ -79,7 +79,7 @@ ZTEST(tee_test_suite, test_reg_unreg)
 	zassert_equal(ret, -EINVAL, "tee_shm_register failed with code %d", ret);
 
 	ret = tee_shm_register(dev, &addr, 0, 0, &shm);
-	zassert_equal(ret, -EINVAL, "tee_shm_register failed with code %d", ret);
+	zassert_equal(ret, 0, "tee_shm_register failed with code %d", ret);
 
 	ret = tee_shm_unregister(dev, NULL);
 	zassert_equal(ret, -EINVAL, "tee_shm_unregister failed with code %d", ret);
