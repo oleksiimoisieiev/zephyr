@@ -178,6 +178,8 @@ ZTEST(tee_test_suite, test_normal_calls)
 	ret = tee_open_session(dev, &arg, 1, &param, &session_id);
 	zassert_ok(ret, "tee_open_session failed with code %d", ret);
 
+	t_call.num = 0;
+
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
 }
@@ -201,7 +203,7 @@ ZTEST(tee_test_suite, test_reg_unreg)
 	zassert_equal(ret, -EINVAL, "tee_shm_register failed with code %d", ret);
 
 	ret = tee_shm_register(dev, &addr, 0, 0, &shm);
-	zassert_equal(ret, -EINVAL, "tee_shm_register failed with code %d", ret);
+	zassert_equal(ret, 0, "tee_shm_register failed with code %d", ret);
 
 	ret = tee_shm_unregister(dev, NULL);
 	zassert_equal(ret, -EINVAL, "tee_shm_unregister failed with code %d", ret);
