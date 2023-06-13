@@ -135,6 +135,30 @@ extern "C" {
 #define TEEC_ERROR_STORAGE_NO_SPACE        0xFFFF3041
 
 /**
+ * Session login methods, for use in tee_open_session() as parameter
+ * connectionMethod. Type is uint32_t.
+ *
+ * TEEC_LOGIN_PUBLIC    	 No login data is provided.
+ * TEEC_LOGIN_USER         	Login data about the user running the Client
+ *                         	Application process is provided.
+ * TEEC_LOGIN_GROUP        	Login data about the group running the Client
+ *                         	Application process is provided.
+ * TEEC_LOGIN_APPLICATION  	Login data about the running Client Application
+ *                         	itself is provided.
+ * TEEC_LOGIN_USER_APPLICATION  Login data about the user and the running
+ *                          	Client Application itself is provided.
+ * TEEC_LOGIN_GROUP_APPLICATION Login data about the group and the running
+ *                          	Client Application itself is provided.
+ */
+#define TEEC_LOGIN_PUBLIC       0x00000000
+#define TEEC_LOGIN_USER         0x00000001
+#define TEEC_LOGIN_GROUP        0x00000002
+#define TEEC_LOGIN_APPLICATION  0x00000004
+#define TEEC_LOGIN_USER_APPLICATION  0x00000005
+#define TEEC_LOGIN_GROUP_APPLICATION  0x00000006
+
+
+/**
  * @brief TEE version
  * @impl_id:	[out] TEE implementation id
  * @impl_caps:	[out] Implementation specific capabilities
