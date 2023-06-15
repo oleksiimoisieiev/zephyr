@@ -215,7 +215,7 @@ static int optee_call(const struct device *dev, struct optee_msg_arg *arg)
 		.a0 = OPTEE_SMC_CALL_WITH_ARG
 	};
 
-	u64_to_regs((uint64_t)arg, &rpc_param.a0, &rpc_param.a1);
+	u64_to_regs((uint64_t)arg, &rpc_param.a1, &rpc_param.a2);
 	while (true) {
 		struct arm_smccc_res res;
 
@@ -429,7 +429,7 @@ out:
 	return (rc) ? rc : ret;
 }
 
-static int optee_shm_register(const struct device *dev, void *addr, size_t size, uint32_t flags,
+static int optee_shm_register(const struct device *dev, void *addr, uint64_t size, uint32_t flags,
 			      struct tee_shm *shm)
 {
 	return 0;
