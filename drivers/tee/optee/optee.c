@@ -14,6 +14,9 @@ LOG_MODULE_REGISTER(optee);
 
 #define DT_DRV_COMPAT linaro_optee_tz
 
+/* amount of physical addresses that can be stored in one page */
+#define OPTEE_NUMBER_OF_ADDR_PER_PAGE (OPTEE_MSG_NONCONTIG_PAGE_SIZE / sizeof(uint64_t))
+
 /*
  * TEE Implementation ID
  */
@@ -430,15 +433,127 @@ out:
 	return (rc) ? rc : ret;
 }
 
-static int optee_shm_register(const struct device *dev, void *addr, uint64_t size, uint32_t flags,
-			      struct tee_shm *shm)
+void *optee_construct_page_list(void *buf, uint32_t len, uint64_t *phys_buf)
 {
-	return 0;
+	const uint32_t page_size = OPTEE_MSG_NONCONTIG_PAGE_SIZE;
+	const uint32_t num_pages_in_pl = page_size - 1;
+	uint32_t page_offset = (uintptr_t)buf & (page_size - 1);
+
+	uint8_t *buf_page;
+	uint32_t num_pages;
+	uint32_t list_size;
+
+	/* see description of OPTEE_MSG_ATTR_NONCONTIG */
+	struct {
+		uint64_t pages[OPTEE_NUMBER_OF_ADDR_PER_PAGE - 1];
+		uint64_t next_page;
+	} *pl;
+
+	num_pages = ROUND_UP(page_offset + len, page_size) / page_size;
+	list_size = ceiling_fraction(num_pages, num_pages_in_pl) * page_size;
+
+	pl = k_aligned_alloc(page_size, list_size);
+	if (!pl) {
+		return NULL;
+	}
+
+	memset(pl, 0, list_size);
+
+	buf_page = (uint8_t *)ROUND_DOWN((uintptr_t)buf, page_size);
+
+	for (uint32_t pl_idx = 0; pl_idx < list_size / page_size; pl_idx++) {
+		for (uint32_t page_idx = 0; num_pages && page_idx < num_pages_in_pl; page_idx++) {
+			pl[pl_idx].pages[page_idx] = z_mem_phys_addr(buf_page);
+			buf_page += page_size;
+			num_pages--;
+		}
+
+		if (!num_pages) {
+			break;
+		}
+
+		pl[pl_idx].next_page = z_mem_phys_addr(pl + 1);
+	}
+
+	/* 12 least significant bits of optee_msg_param.u.tmem.buf_ptr should hold page offset
+	 * of user buffer
+	 */
+	*phys_buf = z_mem_phys_addr(pl) | page_offset;
+
+	return pl;
+}
+
+static int optee_shm_register(const struct device *dev, struct tee_shm *shm)
+{
+	struct tee_shm *shm_arg;
+	struct optee_msg_arg *msg_arg;
+	void *pl;
+	uint64_t pl_phys_and_offset;
+	int rc;
+
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE, OPTEE_MSG_GET_ARG_SIZE(1),
+			 TEE_SHM_ALLOC, &shm_arg);
+	if (rc) {
+		return rc;
+	}
+
+	msg_arg = shm_arg->addr;
+
+	memset(msg_arg, 0, OPTEE_MSG_GET_ARG_SIZE(1));
+
+	pl = optee_construct_page_list(shm->addr, shm->size, &pl_phys_and_offset);
+	if (!pl) {
+		rc = -ENOMEM;
+		goto out;
+	}
+
+	/* for this command op-tee os should support CFG_CORE_DYN_SHM */
+	msg_arg->cmd = OPTEE_MSG_CMD_REGISTER_SHM;
+	/* op-tee OS ingnore this cmd in case when TYPE_TMEM_OUTPUT and NONCONTIG aren't set */
+	msg_arg->params->attr = OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT | OPTEE_MSG_ATTR_NONCONTIG;
+	msg_arg->num_params = 1;
+	msg_arg->params->u.tmem.buf_ptr = pl_phys_and_offset;
+	msg_arg->params->u.tmem.shm_ref = (uint64_t)shm;
+	msg_arg->params->u.tmem.size = shm->size;
+
+	if (optee_call(dev, msg_arg)) {
+		rc = -EINVAL;
+	}
+
+	k_free(pl);
+out:
+	tee_shm_free(dev, shm_arg);
+
+	return rc;
 }
 
 static int optee_shm_unregister(const struct device *dev, struct tee_shm *shm)
 {
-	return 0;
+	struct tee_shm *shm_arg;
+	struct optee_msg_arg *msg_arg;
+	int rc;
+
+	rc = tee_add_shm(dev, NULL, OPTEE_MSG_NONCONTIG_PAGE_SIZE, OPTEE_MSG_GET_ARG_SIZE(1),
+			 TEE_SHM_ALLOC, &shm_arg);
+	if (rc) {
+		return rc;
+	}
+
+	msg_arg = shm_arg->addr;
+
+	memset(msg_arg, 0, OPTEE_MSG_GET_ARG_SIZE(1));
+
+	msg_arg->cmd = OPTEE_MSG_CMD_UNREGISTER_SHM;
+	msg_arg->num_params = 1;
+	msg_arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_RMEM_INPUT;
+	msg_arg->params[0].u.rmem.shm_ref = (uint64_t)shm;
+
+	if (optee_call(dev, msg_arg)) {
+		rc = -EINVAL;
+	}
+
+	tee_shm_free(dev, shm_arg);
+	return rc;
 }
 
 static int optee_suppl_recv(const struct device *dev, uint32_t func, unsigned int num_params,

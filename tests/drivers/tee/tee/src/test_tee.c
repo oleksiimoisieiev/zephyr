@@ -44,8 +44,7 @@ static int test_tee_invoke_func(const struct device *dev, struct tee_invoke_func
 	return 0;
 }
 
-static int test_tee_shm_register(const struct device *dev, void *addr, size_t size, uint32_t flags,
-				 struct tee_shm *shm)
+static int test_tee_shm_register(const struct device *dev, struct tee_shm *shm)
 {
 	printk("%s %d\n", __func__, __LINE__);
 	return 0;
