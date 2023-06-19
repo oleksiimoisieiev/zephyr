@@ -302,8 +302,7 @@ typedef int (*tee_invoke_func_t)(const struct device *dev, struct tee_invoke_fun
  *
  * See @a tee_shm_register() for argument definitions.
  */
-typedef int (*tee_shm_register_t)(const struct device *dev, void *addr, uint64_t size,
-				  uint32_t flags, struct tee_shm *shm);
+typedef int (*tee_shm_register_t)(const struct device *dev, struct tee_shm *shm);
 
 /**
  * @typedef tee_shm_unregister_t
@@ -526,7 +525,7 @@ static inline int tee_add_shm(const struct device *dev, void *addr, size_t align
 			goto err;
 		}
 
-		rc = api->shm_register(dev, addr, size, flags, shm);
+		rc = api->shm_register(dev, shm);
 		if (rc) {
 			goto err;
 		}
