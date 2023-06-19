@@ -44,8 +44,10 @@ extern "C" {
 #endif
 #define TEE_UUID_LEN 16
 
-#define TEE_GEN_CAP_GP	    BIT(0) /* GlobalPlatform compliant TEE */
-#define TEE_GEN_CAP_REG_MEM BIT(1) /* Supports registering shared memory */
+#define TEE_GEN_CAP_GP		BIT(0) /* GlobalPlatform compliant TEE */
+#define TEE_GEN_CAP_PRIVILEGED	BIT(1) /* Privileged device (for supplicant) */
+#define TEE_GEN_CAP_REG_MEM	BIT(2) /* Supports registering shared memory */
+#define TEE_GEN_CAP_MEMREF_NULL BIT(3) /* Support NULL MemRef */
 
 #define TEE_SHM_REGISTER BIT(0)
 #define TEE_SHM_ALLOC BIT(1)
