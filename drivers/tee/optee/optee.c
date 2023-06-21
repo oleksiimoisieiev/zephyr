@@ -9,6 +9,7 @@
 #include <zephyr/logging/log.h>
 
 #include "optee_msg.h"
+#include "optee_rpc_cmd.h"
 #include "optee_smc.h"
 LOG_MODULE_REGISTER(optee);
 
@@ -177,9 +178,188 @@ static void u64_to_regs(uint64_t val, uint32_t *reg0, uint32_t *reg1)
 	*reg1 = val;
 }
 
-static void handle_rpc_call(const struct device *dev, struct optee_rpc_param *param)
+static inline bool check_param_input(struct optee_msg_arg *arg)
+{
+	return arg->num_params == 1 &&
+		 arg->params[0].attr == OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
+}
+
+static void *optee_construct_page_list(void *buf, uint32_t len, uint64_t *phys_buf);
+
+static void handle_cmd_alloc(const struct device *dev, struct optee_msg_arg *arg,
+			     void **pages)
+{
+	int rc;
+	struct tee_shm *shm = NULL;
+	void *pl;
+	uint64_t pl_phys_and_offset;
+
+	arg->ret_origin = TEEC_ORIGIN_COMMS;
+
+	if (!check_param_input(arg)) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	/*
+	 * TODO: OPTEE_SHM_TYPE_APPL type should be handled
+	 */
+	if (arg->params[0].u.value.a != OPTEE_RPC_SHM_TYPE_KERNEL) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	/* TODO handle situation when shm was allocated statically so buffer can be reused*/
+	rc = tee_add_shm(dev, NULL, 0, arg->params[0].u.value.b, TEE_SHM_ALLOC,
+			 &shm);
+
+	if (rc) {
+		if (rc == -ENOMEM) {
+			arg->ret = TEEC_ERROR_OUT_OF_MEMORY;
+		} else {
+			arg->ret = TEEC_ERROR_GENERIC;
+		}
+		return;
+	}
+
+	pl = optee_construct_page_list(shm->addr, shm->size, &pl_phys_and_offset);
+	if (!pl) {
+		arg->ret = TEEC_ERROR_OUT_OF_MEMORY;
+		goto out;
+	}
+
+	*pages = pl;
+	arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_TMEM_OUTPUT | OPTEE_MSG_ATTR_NONCONTIG;
+	arg->params[0].u.tmem.buf_ptr = pl_phys_and_offset;
+	arg->params[0].u.tmem.size = shm->size;
+	arg->params[0].u.tmem.shm_ref = (uint64_t)shm;
+	arg->ret = TEEC_SUCCESS;
+	return;
+out:
+	tee_shm_free(dev, shm);
+}
+
+static void handle_cmd_free(const struct device *dev, struct optee_msg_arg *arg)
+{
+	int rc;
+
+	if (!check_param_input(arg)) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	/*
+	 * TODO: OPTEE_SHM_TYPE_APPL type should be handled
+	 */
+	if (arg->params[0].u.value.a != OPTEE_RPC_SHM_TYPE_KERNEL) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	rc = tee_rm_shm(dev, (struct tee_shm *)arg->params[0].u.value.b);
+	if (rc) {
+		arg->ret = TEEC_ERROR_OUT_OF_MEMORY;
+		return;
+	}
+}
+
+static void handle_cmd_get_time(const struct device *dev, struct optee_msg_arg *arg)
+{
+	int64_t ticks;
+	int64_t up_secs;
+	int64_t up_nsecs;
+
+	if (arg->num_params != 1 ||
+	    (arg->params[0].attr & OPTEE_MSG_ATTR_TYPE_MASK)
+	    != OPTEE_MSG_ATTR_TYPE_VALUE_OUTPUT) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	ticks = k_uptime_ticks();
+
+	up_secs = ticks / CONFIG_SYS_CLOCK_TICKS_PER_SEC;
+	up_nsecs = k_ticks_to_ns_floor64(ticks - up_secs * CONFIG_SYS_CLOCK_TICKS_PER_SEC);
+	arg->params[0].u.value.a = up_secs;
+	arg->params[0].u.value.b = up_nsecs;
+
+	arg->ret = TEEC_SUCCESS;
+}
+
+static void handle_cmd_notify(const struct device *dev, struct optee_msg_arg *arg)
+{
+	/*
+	 * TODO: Implement wait for completion based on zephyr workq
+	 * Just sleep for 10 msec for now.
+	 */
+	k_sleep(K_MSEC(10));
+	arg->ret = TEEC_SUCCESS;
+}
+
+static void handle_cmd_wait(const struct device *dev, struct optee_msg_arg *arg)
+{
+	if (!check_param_input(arg)) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	k_sleep(K_MSEC(arg->params[0].u.value.a));
+
+	arg->ret = TEEC_SUCCESS;
+}
+
+static void free_shm_pages(void **pages)
+{
+	/*
+	 * Clean allocated pages if needed. Some function calls requires pages
+	 * allocation which should be freed after processing new request.
+	 * It is safe to free this list when another SHM op (e,g. another alloc
+	 * or free) was received.
+	 */
+	if (*pages) {
+		k_free(*pages);
+		*pages = NULL;
+	}
+}
+
+static uint32_t handle_func_rpc_call(const struct device *dev, struct tee_shm *shm,
+				     void **pages)
+{
+	struct optee_msg_arg *arg = shm->addr;
+
+	switch (arg->cmd) {
+	case OPTEE_RPC_CMD_SHM_ALLOC:
+		free_shm_pages(pages);
+		handle_cmd_alloc(dev, arg, pages);
+		break;
+	case OPTEE_RPC_CMD_SHM_FREE:
+		handle_cmd_free(dev, arg);
+		break;
+	case OPTEE_RPC_CMD_GET_TIME:
+		handle_cmd_get_time(dev, arg);
+		break;
+	case OPTEE_RPC_CMD_NOTIFICATION:
+		handle_cmd_notify(dev, arg);
+		break;
+	case OPTEE_RPC_CMD_SUSPEND:
+		handle_cmd_wait(dev, arg);
+		break;
+	case OPTEE_RPC_CMD_I2C_TRANSFER:
+		/* TODO: i2c transfer case is not implemented right now */
+		return TEEC_ERROR_NOT_IMPLEMENTED;
+	default:
+		/* TODO: supplicant commands are still not implemented */
+		return TEEC_ERROR_NOT_IMPLEMENTED;
+	}
+
+	return OPTEE_SMC_CALL_RETURN_FROM_RPC;
+}
+
+static void handle_rpc_call(const struct device *dev, struct optee_rpc_param *param,
+			    void **pages)
 {
 	struct tee_shm *shm = NULL;
+	uint32_t res = OPTEE_SMC_CALL_RETURN_FROM_RPC;
 
 	switch (OPTEE_SMC_RETURN_GET_RPC_FUNC(param->a0)) {
 	case OPTEE_SMC_RPC_FUNC_ALLOC:
@@ -203,13 +383,14 @@ static void handle_rpc_call(const struct device *dev, struct optee_rpc_param *pa
 		/* Foreign interrupt was raised */
 		break;
 	case OPTEE_SMC_RPC_FUNC_CMD:
-		/* TODO: Tee supplicatnt function should be called here */
+		shm = (struct tee_shm *)regs_to_u64(param->a1, param->a2);
+		res = handle_func_rpc_call(dev, shm, pages);
 		break;
 	default:
 		break;
 	}
 
-	param->a0 = OPTEE_SMC_CALL_RETURN_FROM_RPC;
+	param->a0 = res;
 }
 
 static int optee_call(const struct device *dev, struct optee_msg_arg *arg)
@@ -218,6 +399,7 @@ static int optee_call(const struct device *dev, struct optee_msg_arg *arg)
 	struct optee_rpc_param param = {
 		.a0 = OPTEE_SMC_CALL_WITH_ARG
 	};
+	void *pages = NULL;
 
 	u64_to_regs((uint64_t)z_mem_phys_addr(arg), &param.a1, &param.a2);
 	while (true) {
@@ -231,8 +413,9 @@ static int optee_call(const struct device *dev, struct optee_msg_arg *arg)
 			param.a1 = res.a1;
 			param.a2 = res.a2;
 			param.a3 = res.a3;
-			handle_rpc_call(dev, &param);
+			handle_rpc_call(dev, &param, &pages);
 		} else {
+			free_shm_pages(&pages);
 			return res.a0 == OPTEE_SMC_RETURN_OK ? TEEC_SUCCESS :
 				TEEC_ERROR_BAD_PARAMETERS;
 		}
