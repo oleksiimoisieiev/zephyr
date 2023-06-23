@@ -11,3 +11,11 @@ config OPTEE
 	  Driver requests functions from the OP-TEE and implements RPC mechanism
 	  needed by OP-TEE to run services. See https://www.op-tee.org for more
 	  information.
+
+config OPTEE_MAX_NOTIF
+	int "Max number of OP-TEE notifications"
+	depends on OPTEE
+	default 255
+	help
+	 Sets the maximum notifications from OP-TEE to the Normal World. OP-TEE using
+	 this mechanism for the synchronization.

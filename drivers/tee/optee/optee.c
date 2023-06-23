@@ -7,6 +7,8 @@
 #include <zephyr/arch/arm64/arm-smccc.h>
 #include <zephyr/drivers/tee.h>
 #include <zephyr/logging/log.h>
+#include <zephyr/sys/bitarray.h>
+#include <zephyr/sys/dlist.h>
 
 #include "optee_msg.h"
 #include "optee_rpc_cmd.h"
@@ -28,6 +30,14 @@ LOG_MODULE_REGISTER(optee);
  */
 #define TEE_OPTEE_CAP_TZ  BIT(0)
 
+/*
+ * Bitmap of the ongoing notificatons, received from OP-TEE. Maximum number is
+ * CONFIG_OPTEE_MAX_NOTIF. This bitmap is needed to handle case when SEND command
+ * was received before WAIT command from OP-TEE. In this case WAIT will not create
+ * locks.
+ */
+SYS_BITARRAY_DEFINE_STATIC(notif_bitmap, CONFIG_OPTEE_MAX_NOTIF);
+
 struct optee_rpc_param {
 	uint32_t a0;
 	uint32_t a1;
@@ -43,8 +53,17 @@ typedef void (*smc_call_t)(unsigned long a0, unsigned long a1, unsigned long a2,
 			   unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
 			   struct arm_smccc_res *res);
 
+struct optee_notify {
+	sys_dnode_t node;
+	uint32_t key;
+	struct k_sem wait;
+};
+
 static struct optee_driver_data {
 	smc_call_t smc_call;
+
+	sys_dlist_t notif;
+	struct k_spinlock notif_lock;
 } optee_data;
 
 /* Wrapping functions so function pointer can be used */
@@ -286,14 +305,120 @@ static void handle_cmd_get_time(const struct device *dev, struct optee_msg_arg *
 	arg->ret = TEEC_SUCCESS;
 }
 
+/* This should be called under notif_lock */
+static inline bool key_is_pending(struct optee_driver_data *data, uint32_t key)
+{
+	struct optee_notify *iter;
+
+	SYS_DLIST_FOR_EACH_CONTAINER(&data->notif, iter, node) {
+		if (iter->key == key) {
+			k_sem_give(&iter->wait);
+			return true;
+		}
+	}
+
+	return false;
+}
+
+static int optee_notif_send(const struct device *dev, uint32_t key)
+{
+	struct optee_driver_data *data = dev->data;
+	k_spinlock_key_t sp_key;
+
+	if (key > CONFIG_OPTEE_MAX_NOTIF) {
+		return -EINVAL;
+	}
+
+	sp_key = k_spin_lock(&data->notif_lock);
+	if (!key_is_pending(data, key)) {
+		/* If nobody is waiting for key - set bit in the bitmap */
+		sys_bitarray_set_bit(&notif_bitmap, key);
+	}
+	k_spin_unlock(&data->notif_lock, sp_key);
+
+	return 0;
+}
+
+static int optee_notif_wait(const struct device *dev, uint32_t key)
+{
+	int rc = 0;
+	struct optee_driver_data *data = dev->data;
+	struct optee_notify *entry;
+	k_spinlock_key_t sp_key;
+	int prev_val;
+
+	if (key > CONFIG_OPTEE_MAX_NOTIF)
+		return -EINVAL;
+
+	entry = k_malloc(sizeof(*entry));
+	if (!entry) {
+		return -ENOMEM;
+	}
+
+	k_sem_init(&entry->wait, 0, 1);
+	entry->key = key;
+
+	sp_key = k_spin_lock(&data->notif_lock);
+
+	/*
+	 * If notif bit was set then SEND command was already received.
+	 * Skipping wait.
+	 */
+	rc = sys_bitarray_test_and_clear_bit(&notif_bitmap, key, &prev_val);
+	if (rc || prev_val) {
+		goto out;
+	}
+
+	/*
+	 * If key is already registred, then skip.
+	 */
+	if (key_is_pending(data, key)) {
+		rc = -EBUSY;
+		goto out;
+	}
+
+	sys_dlist_append(&data->notif, &entry->node);
+
+	k_spin_unlock(&data->notif_lock, sp_key);
+	k_sem_take(&entry->wait, K_FOREVER);
+	sp_key = k_spin_lock(&data->notif_lock);
+
+	sys_dlist_remove(&entry->node);
+out:
+	k_spin_unlock(&data->notif_lock, sp_key);
+
+	k_free(entry);
+
+	return rc;
+}
+
 static void handle_cmd_notify(const struct device *dev, struct optee_msg_arg *arg)
 {
-	/*
-	 * TODO: Implement wait for completion based on zephyr workq
-	 * Just sleep for 10 msec for now.
-	 */
-	k_sleep(K_MSEC(10));
+	if (!check_param_input(arg)) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		return;
+	}
+
+	switch (arg->params[0].u.value.a) {
+	case OPTEE_RPC_NOTIFICATION_SEND:
+		if (optee_notif_send(dev, arg->params[0].u.value.b)) {
+			goto err;
+		}
+		break;
+	case OPTEE_RPC_NOTIFICATION_WAIT:
+		if (optee_notif_wait(dev, arg->params[0].u.value.b)) {
+			goto err;
+		}
+		break;
+	default:
+		goto err;
+	}
+
 	arg->ret = TEEC_SUCCESS;
+	return;
+
+err:
+	arg->ret = TEEC_ERROR_BAD_PARAMETERS;
 }
 
 static void handle_cmd_wait(const struct device *dev, struct optee_msg_arg *arg)
@@ -783,6 +908,8 @@ static int set_optee_method(void)
 
 static int optee_init(const struct device *dev)
 {
+	struct optee_driver_data *data = dev->data;
+
 	if (set_optee_method()) {
 		return -ENOTSUP;
 	}
@@ -790,6 +917,8 @@ static int optee_init(const struct device *dev)
 	 * TODO At this stage driver should request and validate
 	 * capabilities from OP-TEE OS.
 	 */
+
+	sys_dlist_init(&data->notif);
 
 	return 0;
 }
