@@ -35,6 +35,7 @@ typedef void (*smc_cb_t)(unsigned long a0, unsigned long a1, unsigned long a2, u
 
 static struct test_call {
 	int num;
+	int pending;
 	smc_cb_t smc_cb;
 	uint32_t a0;
 	uint32_t a1;
@@ -44,14 +45,24 @@ static struct test_call {
 	uint32_t a5;
 	uint32_t a6;
 	uint32_t a7;
+	k_tid_t th_id;
 } t_call;
+
+static struct test_call wait_call;
+static struct test_call send_call;
 
 void arm_smccc_smc(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
 		   unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
 		   struct arm_smccc_res *res)
 {
-	if (t_call.smc_cb) {
+	if (t_call.pending && t_call.smc_cb) {
 		t_call.smc_cb(a0, a1, a2, a3, a4, a5, a6, a7, res);
+	}
+	if (wait_call.pending && wait_call.smc_cb && (k_current_get() == wait_call.th_id)) {
+		wait_call.smc_cb(a0, a1, a2, a3, a4, a5, a6, a7, res);
+	}
+	if (send_call.pending && send_call.smc_cb) {
+		send_call.smc_cb(a0, a1, a2, a3, a4, a5, a6, a7, res);
 	}
 }
 
@@ -110,6 +121,7 @@ ZTEST(optee_test_suite, test_fast_calls)
 
 	zassert_not_null(dev, "Unable to get dev");
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = fast_call;
 
@@ -131,6 +143,7 @@ ZTEST(optee_test_suite, test_fast_calls)
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
+	t_call.pending = 0;
 }
 
 ZTEST(optee_test_suite, test_invoke_fn)
@@ -144,6 +157,7 @@ ZTEST(optee_test_suite, test_invoke_fn)
 
 	zassert_not_null(dev, "Unable to get dev");
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = fast_call;
 
@@ -176,6 +190,7 @@ ZTEST(optee_test_suite, test_invoke_fn)
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
+	t_call.pending = 0;
 }
 
 ZTEST(optee_test_suite, test_cancel)
@@ -188,6 +203,7 @@ ZTEST(optee_test_suite, test_cancel)
 
 	zassert_not_null(dev, "Unable to get dev");
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = fast_call;
 
@@ -204,6 +220,7 @@ ZTEST(optee_test_suite, test_cancel)
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
+	t_call.pending = 0;
 }
 
 void normal_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
@@ -259,6 +276,7 @@ ZTEST(optee_test_suite, test_normal_calls)
 
 	zassert_not_null(dev, "Unable to get dev");
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = normal_call;
 
@@ -274,6 +292,7 @@ ZTEST(optee_test_suite, test_normal_calls)
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
+	t_call.pending = 0;
 }
 
 ZTEST(optee_test_suite, test_reg_unreg)
@@ -283,6 +302,7 @@ ZTEST(optee_test_suite, test_reg_unreg)
 	struct tee_shm *shm = NULL;
 	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = normal_call;
 	zassert_not_null(dev, "Unable to get dev");
@@ -323,6 +343,7 @@ ZTEST(optee_test_suite, test_reg_unreg)
 	t_call.num = 0;
 	ret = tee_shm_free(dev, shm);
 	zassert_ok(ret, "tee_shm_free failed with code %d", ret);
+	t_call.pending = 0;
 }
 
 static uint64_t regs_to_u64(uint32_t reg0, uint32_t reg1)
@@ -420,6 +441,7 @@ ZTEST(optee_test_suite, test_func_shm_alloc)
 
 	zassert_not_null(dev, "Unable to get dev");
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = fast_call;
 
@@ -444,6 +466,8 @@ ZTEST(optee_test_suite, test_func_shm_alloc)
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
+
+	t_call.pending = 0;
 }
 
 void cmd_gettime_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
@@ -513,6 +537,7 @@ ZTEST(optee_test_suite, test_gettime)
 
 	zassert_not_null(dev, "Unable to get dev");
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = fast_call;
 
@@ -542,6 +567,7 @@ ZTEST(optee_test_suite, test_gettime)
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
+	t_call.pending = 0;
 }
 
 void cmd_suspend_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
@@ -607,6 +633,7 @@ ZTEST(optee_test_suite, test_suspend)
 
 	zassert_not_null(dev, "Unable to get dev");
 
+	t_call.pending = 1;
 	t_call.num = 0;
 	t_call.smc_cb = fast_call;
 
@@ -632,6 +659,272 @@ ZTEST(optee_test_suite, test_suspend)
 
 	ret = tee_close_session(dev, session_id);
 	zassert_ok(ret, "close_session failed with code %d", ret);
+	t_call.pending = 0;
+}
+
+void cmd_notify_alloc_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
+			   unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
+			   struct arm_smccc_res *res)
+{
+	res->a1 = a1;
+	res->a2 = a2;
+	res->a3 = a3;
+	res->a4 = a4;
+	res->a5 = a5;
+
+	switch (t_call.num) {
+	case 0:
+		res->a0 = OPTEE_SMC_RETURN_RPC_PREFIX | OPTEE_SMC_RPC_FUNC_ALLOC;
+		res->a1 = 1;
+		break;
+	case 1:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+		/* res->a1 = a4; */
+		/* res->a2 = a5; */
+		g_shm_ref = regs_to_u64(a4, a5);
+		break;
+	default:
+		zassert_equal(a0, 0x32000004, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+	}
+
+	t_call.num++;
+}
+
+void cmd_notify_free_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
+			  unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
+			  struct arm_smccc_res *res)
+{
+	res->a1 = a1;
+	res->a2 = a2;
+	res->a3 = a3;
+	res->a4 = a4;
+	res->a5 = a5;
+
+	switch (t_call.num) {
+	case 0:
+		zassert_equal(a0, 0x32000004, "%s failed with ret %lx", __func__, a0);
+		u64_to_regs(g_shm_ref, &res->a1, &res->a2);
+		res->a0 = OPTEE_SMC_RETURN_RPC_PREFIX | OPTEE_SMC_RPC_FUNC_FREE;
+		break;
+	case 1:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+		res->a1 = a4;
+		res->a2 = a5;
+		break;
+	default:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+	}
+
+	t_call.num++;
+}
+
+static struct test_call wait_call;
+static struct test_call send_call;
+
+void cmd_notify_wait_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
+			  unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
+			  struct arm_smccc_res *res)
+{
+	struct optee_msg_arg *arg;
+	struct tee_shm *shm;
+
+	res->a1 = a1;
+	res->a2 = a2;
+	res->a3 = a3;
+	res->a4 = a4;
+	res->a5 = a5;
+
+	switch (wait_call.num) {
+	case 0:
+		zassert_equal(a0, 0x32000004, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_RPC_PREFIX | OPTEE_SMC_RPC_FUNC_CMD;
+		shm = (struct tee_shm *)g_shm_ref;
+		arg = (struct optee_msg_arg *)shm->addr;
+		arg->cmd = OPTEE_RPC_CMD_NOTIFICATION;
+		arg->num_params = 1;
+		arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
+		arg->params[0].u.value.a = OPTEE_RPC_NOTIFICATION_WAIT;
+		arg->params[0].u.value.b = wait_call.a0; /* Set notification key */
+		u64_to_regs(g_shm_ref, &res->a1, &res->a2);
+		break;
+	default:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+		wait_call.a6 = 1;
+	}
+
+	wait_call.num++;
+}
+
+void cmd_notify_send_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
+			  unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
+			  struct arm_smccc_res *res)
+{
+	struct optee_msg_arg *arg;
+	struct tee_shm *shm;
+
+	res->a1 = a1;
+	res->a2 = a2;
+	res->a3 = a3;
+	res->a4 = a4;
+	res->a5 = a5;
+
+	switch (send_call.num) {
+	case 0:
+		zassert_equal(a0, 0x32000004, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_RPC_PREFIX | OPTEE_SMC_RPC_FUNC_CMD;
+		shm = (struct tee_shm *)g_shm_ref;
+		arg = (struct optee_msg_arg *)shm->addr;
+		arg->cmd = OPTEE_RPC_CMD_NOTIFICATION;
+		arg->num_params = 1;
+		arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
+		arg->params[0].u.value.a = OPTEE_RPC_NOTIFICATION_SEND;
+		arg->params[0].u.value.b = send_call.a0; /* Set notification key */
+		u64_to_regs(g_shm_ref, &res->a1, &res->a2);
+		break;
+	default:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+		send_call.a6 = 1;
+	}
+
+	send_call.num++;
+}
+
+static int test_invoke_fn(const struct device *const dev, uint32_t session_id)
+{
+	struct tee_invoke_func_arg invoke_arg = {};
+	struct tee_param param = {};
+
+	invoke_arg.func = 12;
+	invoke_arg.session = session_id;
+
+	return tee_invoke_func(dev, &invoke_arg, 1, &param);
+}
+
+static void wait_handler(void *arg0, void *arg1, void *arg2)
+{
+	int ret;
+	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
+
+	ARG_UNUSED(arg0);
+	ARG_UNUSED(arg1);
+	ARG_UNUSED(arg2);
+
+	/* This expects wait_call.a0 to be set as key and wait_call.a4 as session_id */
+	wait_call.pending = 1;
+	wait_call.th_id = k_current_get();
+	wait_call.num = 0;
+	wait_call.a6 = 0; /* result */
+
+	wait_call.smc_cb = cmd_notify_wait_call;
+
+	ret = test_invoke_fn(dev, t_call.a4);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+	wait_call.a6 = 1;
+	wait_call.pending = 0;
+}
+
+#define WAIT_STACKSIZE 512
+#define WAIT_PRIORITY  4
+
+static K_THREAD_STACK_DEFINE(wait_stack, WAIT_STACKSIZE);
+static struct k_thread wait_thread;
+
+static void do_wait(int key, uint32_t session_id)
+{
+	wait_call.a0 = key;
+	wait_call.a4 = session_id;
+	k_thread_create(&wait_thread, wait_stack, WAIT_STACKSIZE, wait_handler,
+			INT_TO_POINTER(1) /* key */,
+			NULL, NULL, K_PRIO_COOP(WAIT_PRIORITY), 0, K_NO_WAIT);
+}
+
+ZTEST(optee_test_suite, test_notify)
+{
+	int ret;
+	uint32_t session_id;
+	struct tee_open_session_arg arg = {};
+	struct tee_param param = {};
+	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
+
+	zassert_not_null(dev, "Unable to get dev");
+
+	t_call.pending = 1;
+	t_call.num = 0;
+	t_call.smc_cb = fast_call;
+
+	arg.uuid[0] = 111;
+	arg.clnt_uuid[0] = 222;
+	arg.clnt_login = TEEC_LOGIN_PUBLIC;
+	param.attr = TEE_PARAM_ATTR_TYPE_NONE;
+	param.a = 3333;
+	ret = tee_open_session(dev, &arg, 1, &param, &session_id);
+	zassert_ok(ret, "tee_open_session failed with code %d", ret);
+
+	t_call.num = 0;
+	t_call.smc_cb = cmd_notify_alloc_call;
+
+	ret = test_invoke_fn(dev, session_id);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+	t_call.pending = 0;
+
+	/* Wait then send */
+	do_wait(1, session_id);
+	k_sleep(K_MSEC(100));
+
+	send_call.pending = 1;
+	send_call.num = 0;
+	send_call.a0 = 1; /* key */
+	send_call.smc_cb = cmd_notify_send_call;
+
+	ret = test_invoke_fn(dev, session_id);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+	send_call.pending = 0;
+
+	k_sleep(K_MSEC(100));
+	zassert_equal(wait_call.a6, 1, "Notify wait is still in progress");
+
+	/* Test send then wait */
+	send_call.pending = 1;
+	send_call.num = 0;
+	send_call.a0 = 2; /* key */
+	send_call.smc_cb = cmd_notify_send_call;
+
+	ret = test_invoke_fn(dev, session_id);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+	send_call.pending = 0;
+
+	wait_call.pending = 1;
+	wait_call.th_id = k_current_get();
+	wait_call.num = 0;
+	wait_call.a0 = 2; /* key */
+
+	wait_call.smc_cb = cmd_notify_wait_call;
+
+	ret = test_invoke_fn(dev, session_id);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+
+	wait_call.pending = 0;
+	/* End of test section */
+
+	t_call.pending = 1;
+	t_call.num = 0;
+	t_call.smc_cb = cmd_notify_free_call;
+
+	ret = test_invoke_fn(dev, session_id);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+
+	t_call.num = 0;
+	t_call.smc_cb = fast_call;
+
+	ret = tee_close_session(dev, session_id);
+	zassert_ok(ret, "close_session failed with code %d", ret);
+	t_call.pending = 0;
 }
 
 ZTEST_SUITE(optee_test_suite, NULL, NULL, NULL, NULL, NULL);
