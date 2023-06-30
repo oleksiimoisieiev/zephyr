@@ -470,6 +470,153 @@ ZTEST(optee_test_suite, test_func_shm_alloc)
 	t_call.pending = 0;
 }
 
+K_KERNEL_STACK_DEFINE(supp_stack, 8192);
+#define TEE_NUM_PARAMS 5
+static struct k_thread supp_thread_data;
+volatile int supp_thread_ok;
+
+void cmd_rpc_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
+			 unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
+			 struct arm_smccc_res *res)
+{
+	struct optee_msg_arg *arg;
+	struct tee_shm *shm;
+
+	t_call.a0 = a0;
+	t_call.a1 = a1;
+	t_call.a2 = a2;
+	t_call.a3 = a3;
+	t_call.a4 = a4;
+	t_call.a5 = a5;
+	t_call.a6 = a6;
+	t_call.a7 = a7;
+
+	res->a1 = a1;
+	res->a2 = a2;
+	res->a3 = a3;
+	res->a4 = a4;
+	res->a5 = a5;
+
+	switch (t_call.num) {
+	case 0:
+		res->a0 = OPTEE_SMC_RETURN_RPC_PREFIX | OPTEE_SMC_RPC_FUNC_ALLOC;
+		res->a1 = 1;
+		break;
+	case 1:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_RPC_PREFIX | OPTEE_SMC_RPC_FUNC_CMD;
+		arg = (struct optee_msg_arg *)regs_to_u64(a1, a2);
+		/* Fall back to supplicant branch */
+		arg->cmd = 555;
+		arg->num_params = 2;
+		arg->params[0].attr = OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
+		arg->params[0].u.value.a = 1111;
+		arg->params[0].u.value.b = 3;
+		arg->params[1].attr = OPTEE_MSG_ATTR_TYPE_VALUE_OUTPUT;
+		res->a1 = a4;
+		res->a2 = a5;
+		break;
+	case 2:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		shm = (struct tee_shm *)regs_to_u64(a1, a2);
+		arg = (struct optee_msg_arg *)shm->addr;
+		zassert_equal(arg->params[1].attr, OPTEE_MSG_ATTR_TYPE_VALUE_OUTPUT,
+			"%s failed wrong attr %lx", __func__, arg->params[0].attr);
+		zassert_equal(arg->params[1].u.value.a, 0x1234, "%s failed wrong a %lx",
+			__func__, arg->params[0].u.value.a);
+		zassert_equal(arg->params[1].u.value.b, 0x5678, "%s failed wrong b %lx",
+			__func__, arg->params[0].u.value.b);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+		break;
+	default:
+		zassert_equal(a0, 0x32000003, "%s failed with ret %lx", __func__, a0);
+		res->a0 = OPTEE_SMC_RETURN_OK;
+	}
+
+	t_call.num++;
+}
+
+static void supp_thread_comm(void)
+{
+	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
+	struct tee_param params[TEE_NUM_PARAMS];
+	unsigned int num_params = TEE_NUM_PARAMS;
+	uint32_t func;
+	int ret;
+
+	supp_thread_ok = true;
+
+	ret = tee_suppl_recv(dev, &func, &num_params, params);
+
+	if (ret != 0) {
+		printk("tee_suppl_recv failed with %d\n", ret);
+		supp_thread_ok = false;
+	}
+
+	if (func != 555 || num_params != 2) {
+		printk("Unexpected func & num_params %d %d\n", func, num_params);
+		supp_thread_ok = false;
+	}
+
+	if (params[0].attr != OPTEE_MSG_ATTR_TYPE_VALUE_INPUT ||
+		params[1].attr != OPTEE_MSG_ATTR_TYPE_VALUE_OUTPUT ||
+	    params[0].a != 1111 ||
+	    params[0].b != 3) {
+		printk("Unexpected params %d %d %d\n", params[0].attr,
+		       params[0].a, params[0].b);
+		supp_thread_ok = false;
+	}
+
+	params[1].a = 0x1234;
+	params[1].b = 0x5678;
+	tee_suppl_send(dev, 0, 2, params);
+}
+
+ZTEST(optee_test_suite, test_func_rpc_supp_cmd)
+{
+	int ret;
+	uint32_t session_id;
+	struct tee_open_session_arg arg = {};
+	struct tee_invoke_func_arg invoke_arg = {};
+	struct tee_param param = {};
+	const struct device *const dev = DEVICE_DT_GET_ONE(linaro_optee_tz);
+	k_tid_t tid;
+
+	tid = k_thread_create(&supp_thread_data, supp_stack,
+			K_KERNEL_STACK_SIZEOF(supp_stack),
+			(k_thread_entry_t)supp_thread_comm, NULL, NULL, NULL,
+			K_PRIO_PREEMPT(CONFIG_NUM_PREEMPT_PRIORITIES - 1), 0, K_NO_WAIT);
+	zassert_not_null(dev, "Unable to get dev");
+
+	t_call.pending = 1;
+	t_call.num = 0;
+	t_call.smc_cb = fast_call;
+
+	arg.uuid[0] = 111;
+	arg.clnt_uuid[0] = 222;
+	arg.clnt_login = TEEC_LOGIN_PUBLIC;
+	param.attr = TEE_PARAM_ATTR_TYPE_NONE;
+	param.a = 3333;
+	ret = tee_open_session(dev, &arg, 1, &param, &session_id);
+	zassert_ok(ret, "tee_open_session failed with code %d", ret);
+
+	t_call.num = 0;
+	t_call.smc_cb = cmd_rpc_call;
+
+	invoke_arg.func = 12;
+	invoke_arg.session = 1;
+	ret = tee_invoke_func(dev, &invoke_arg, 1, &param);
+	zassert_ok(ret, "tee_invoke_fn failed with code %d", ret);
+
+	t_call.num = 0;
+	t_call.smc_cb = fast_call;
+
+	ret = tee_close_session(dev, session_id);
+	zassert_ok(ret, "close_session failed with code %d", ret);
+	zassert_true(supp_thread_ok, "supp_thread_comm failed");
+	t_call.pending = 0;
+	k_thread_abort(tid);
+}
 void cmd_gettime_call(unsigned long a0, unsigned long a1, unsigned long a2, unsigned long a3,
 		      unsigned long a4, unsigned long a5, unsigned long a6, unsigned long a7,
 		      struct arm_smccc_res *res)
