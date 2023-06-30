@@ -268,6 +268,41 @@ static uint32_t optee_call_supp(const struct device *dev, uint32_t func, size_t 
 
 	return ret;
 }
+
+static int cmd_alloc_suppl(const struct device *dev, size_t sz, struct tee_shm **shm)
+{
+	uint32_t ret;
+	struct tee_param param;
+
+	param.attr = TEE_PARAM_ATTR_TYPE_VALUE_INOUT;
+	param.a = OPTEE_RPC_SHM_TYPE_APPL;
+	param.b = sz;
+	param.c = 0;
+
+	ret = optee_call_supp(dev, OPTEE_RPC_CMD_SHM_ALLOC, 1, &param);
+
+	if (ret) {
+		return ret;
+	}
+
+	ret = tee_add_shm(dev, (void *)param.c, 0, param.b, 0, shm);
+
+	return ret;
+}
+
+static void cmd_free_suppl(const struct device *dev, struct tee_shm *shm)
+{
+	struct tee_param param;
+
+	param.attr = TEE_PARAM_ATTR_TYPE_VALUE_INOUT;
+	param.a = OPTEE_RPC_SHM_TYPE_APPL;
+	param.b = (uint64_t)shm;
+	param.c = 0;
+
+	optee_call_supp(dev, OPTEE_RPC_CMD_SHM_FREE, 1, &param);
+	tee_rm_shm(dev, shm);
+}
+
 static void handle_cmd_alloc(const struct device *dev, struct optee_msg_arg *arg,
 			     void **pages)
 {
@@ -283,17 +318,19 @@ static void handle_cmd_alloc(const struct device *dev, struct optee_msg_arg *arg
 		return;
 	}
 
-	/*
-	 * TODO: OPTEE_SHM_TYPE_APPL type should be handled
-	 */
-	if (arg->params[0].u.value.a != OPTEE_RPC_SHM_TYPE_KERNEL) {
+	switch (arg->params[0].u.value.a) {
+	case OPTEE_RPC_SHM_TYPE_KERNEL:
+		/* TODO handle situation when shm was allocated statically so buffer can be reused*/
+		rc = tee_add_shm(dev, NULL, 0, arg->params[0].u.value.b, TEE_SHM_ALLOC,
+				&shm);
+		break;
+	case OPTEE_RPC_SHM_TYPE_APPL:
+		rc = cmd_alloc_suppl(dev, arg->params[0].u.value.b, &shm);
+		break;
+	default:
 		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
 		return;
 	}
-
-	/* TODO handle situation when shm was allocated statically so buffer can be reused*/
-	rc = tee_add_shm(dev, NULL, 0, arg->params[0].u.value.b, TEE_SHM_ALLOC,
-			 &shm);
 
 	if (rc) {
 		if (rc == -ENOMEM) {
@@ -323,26 +360,31 @@ out:
 
 static void handle_cmd_free(const struct device *dev, struct optee_msg_arg *arg)
 {
-	int rc;
+	int rc = 0;
 
 	if (!check_param_input(arg)) {
 		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
 		return;
 	}
 
-	/*
-	 * TODO: OPTEE_SHM_TYPE_APPL type should be handled
-	 */
-	if (arg->params[0].u.value.a != OPTEE_RPC_SHM_TYPE_KERNEL) {
+	switch (arg->params[0].u.value.a) {
+	case OPTEE_RPC_SHM_TYPE_KERNEL:
+		rc = tee_rm_shm(dev, (struct tee_shm *)arg->params[0].u.value.b);
+		break;
+	case OPTEE_RPC_SHM_TYPE_APPL:
+		cmd_free_suppl(dev, (struct tee_shm *)arg->params[0].u.value.b);
+		break;
+	default:
 		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
 		return;
 	}
 
-	rc = tee_rm_shm(dev, (struct tee_shm *)arg->params[0].u.value.b);
 	if (rc) {
 		arg->ret = TEEC_ERROR_OUT_OF_MEMORY;
 		return;
 	}
+
+	arg->ret = TEEC_SUCCESS;
 }
 
 static void handle_cmd_get_time(const struct device *dev, struct optee_msg_arg *arg)
