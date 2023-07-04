@@ -156,7 +156,7 @@ static int msg_param_to_param(struct tee_param *param, unsigned int num_param,
 		case OPTEE_MSG_ATTR_TYPE_VALUE_INPUT:
 		case OPTEE_MSG_ATTR_TYPE_VALUE_OUTPUT:
 		case OPTEE_MSG_ATTR_TYPE_VALUE_INOUT:
-			tp->attr = TEE_PARAM_ATTR_TYPE_VALUE_INOUT + attr -
+			tp->attr = TEE_PARAM_ATTR_TYPE_VALUE_INPUT + attr -
 				OPTEE_MSG_ATTR_TYPE_VALUE_INPUT;
 			tp->a = mtp->u.value.a;
 			tp->b = mtp->u.value.b;
