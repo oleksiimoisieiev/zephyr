@@ -59,11 +59,34 @@ struct optee_notify {
 	struct k_sem wait;
 };
 
+struct optee_supp_req {
+	sys_dnode_t link;
+
+	bool in_queue;
+	uint32_t func;
+	uint32_t ret;
+	size_t num_params;
+	struct tee_param *param;
+
+	struct k_sem complete;
+};
+
+struct optee_supp {
+	/* Serializes access to this struct */
+	struct k_mutex mutex;
+
+	int req_id;
+	sys_dlist_t reqs;
+	struct optee_supp_req *current;
+	struct k_sem reqs_c;
+};
+
 static struct optee_driver_data {
 	smc_call_t smc_call;
 
 	sys_dlist_t notif;
 	struct k_spinlock notif_lock;
+	struct optee_supp supp;
 } optee_data;
 
 /* Wrapping functions so function pointer can be used */
@@ -205,6 +228,46 @@ static inline bool check_param_input(struct optee_msg_arg *arg)
 
 static void *optee_construct_page_list(void *buf, uint32_t len, uint64_t *phys_buf);
 
+static uint32_t optee_call_supp(const struct device *dev, uint32_t func, size_t num_params,
+			struct tee_param *param)
+
+{
+	struct optee_driver_data *data = (struct optee_driver_data *) dev->data;
+	struct optee_supp *supp = &data->supp;
+	struct optee_supp_req *req;
+	uint32_t ret;
+
+	req = k_malloc(sizeof(*req));
+	if (!req) {
+		return TEEC_ERROR_OUT_OF_MEMORY;
+	}
+
+	k_sem_init(&req->complete, 0, 1);
+	req->func = func;
+	req->num_params = num_params;
+	req->param = param;
+
+	/* Insert the request in the request list */
+	k_mutex_lock(&supp->mutex, K_FOREVER);
+	sys_dlist_append(&supp->reqs, &req->link);
+	k_mutex_unlock(&supp->mutex);
+
+	/* Tell an event listener there's a new request */
+	k_sem_give(&supp->reqs_c);
+
+	/*
+	 * Wait for supplicant to process and return result, once we've
+	 * returned from k_sem_take(&req->c) successfully we have
+	 * exclusive access again.
+	 */
+
+	k_sem_take(&req->complete, K_FOREVER);
+
+	ret = req->ret;
+	k_free(req);
+
+	return ret;
+}
 static void handle_cmd_alloc(const struct device *dev, struct optee_msg_arg *arg,
 			     void **pages)
 {
@@ -447,6 +510,37 @@ static void free_shm_pages(void **pages)
 	}
 }
 
+static void handle_rpc_supp_cmd(const struct device *dev, struct optee_msg_arg *arg)
+{
+	struct tee_param *params;
+	int ret;
+
+	arg->ret_origin = TEEC_ORIGIN_COMMS;
+
+	params = k_malloc(sizeof(*params) * arg->num_params);
+	if (!params) {
+		arg->ret = TEEC_ERROR_OUT_OF_MEMORY;
+		return;
+	}
+
+	ret = msg_param_to_param(params, arg->num_params, arg->params);
+	if (ret) {
+		arg->ret = TEEC_ERROR_BAD_PARAMETERS;
+		arg->ret_origin = TEEC_ORIGIN_COMMS;
+		goto out;
+	}
+
+	arg->ret = optee_call_supp(dev, arg->cmd, arg->num_params, params);
+
+	ret = param_to_msg_param(params, arg->num_params, arg->params);
+	if (ret) {
+		arg->ret = TEEC_ERROR_GENERIC;
+		arg->ret_origin = TEEC_ORIGIN_COMMS;
+	}
+out:
+	k_free(params);
+}
+
 static uint32_t handle_func_rpc_call(const struct device *dev, struct tee_shm *shm,
 				     void **pages)
 {
@@ -473,8 +567,8 @@ static uint32_t handle_func_rpc_call(const struct device *dev, struct tee_shm *s
 		/* TODO: i2c transfer case is not implemented right now */
 		return TEEC_ERROR_NOT_IMPLEMENTED;
 	default:
-		/* TODO: supplicant commands are still not implemented */
-		return TEEC_ERROR_NOT_IMPLEMENTED;
+		handle_rpc_supp_cmd(dev, arg);
+		break;
 	}
 
 	return OPTEE_SMC_CALL_RETURN_FROM_RPC;
@@ -879,12 +973,99 @@ static int optee_shm_unregister(const struct device *dev, struct tee_shm *shm)
 static int optee_suppl_recv(const struct device *dev, uint32_t *func, unsigned int *num_params,
 			    struct tee_param *param)
 {
+	struct optee_driver_data *data = (struct optee_driver_data *)dev->data;
+	struct optee_supp *supp = &data->supp;
+	struct optee_supp_req *req = NULL;
+
+	while (true) {
+		k_mutex_lock(&supp->mutex, K_FOREVER);
+		req = (struct optee_supp_req *)sys_dlist_peek_head(&supp->reqs);
+
+		if (req) {
+			if (supp->current != NULL) {
+				LOG_ERR("Concurrent supp_recv calls are not supported");
+				k_mutex_unlock(&supp->mutex);
+				return -EBUSY;
+			}
+
+			if (*num_params < req->num_params) {
+				LOG_ERR("Not enough space for params, need at least %lu",
+					req->num_params);
+				k_mutex_unlock(&supp->mutex);
+				return -EINVAL;
+			}
+
+			supp->current = req;
+			sys_dlist_remove(&req->link);
+		}
+		k_mutex_unlock(&supp->mutex);
+
+		if (req) {
+			break;
+		}
+
+		k_sem_take(&supp->reqs_c, K_FOREVER);
+	}
+
+	*func = req->func;
+	*num_params = req->num_params;
+	memcpy(param, req->param, sizeof(struct tee_param) * req->num_params);
+
 	return 0;
 }
 
 static int optee_suppl_send(const struct device *dev, unsigned int ret, unsigned int num_params,
 			    struct tee_param *param)
 {
+	struct optee_driver_data *data = (struct optee_driver_data *)dev->data;
+	struct optee_supp *supp = &data->supp;
+	struct optee_supp_req *req = NULL;
+	size_t n;
+
+	k_mutex_lock(&supp->mutex, K_FOREVER);
+	if (supp->current && num_params >= supp->current->num_params) {
+		req = supp->current;
+		supp->current = NULL;
+	} else {
+		LOG_ERR("Invalid number of parameters, expected %lu got %u", req->num_params,
+			num_params);
+	}
+	k_mutex_unlock(&supp->mutex);
+
+	if (!req) {
+		return -EINVAL;
+	}
+
+	/* Update out and in/out parameters */
+	for (n = 0; n < req->num_params; n++) {
+		struct tee_param *p = req->param + n;
+
+		switch (p->attr & TEE_PARAM_ATTR_TYPE_MASK) {
+		case TEE_PARAM_ATTR_TYPE_VALUE_OUTPUT:
+		case TEE_PARAM_ATTR_TYPE_VALUE_INOUT:
+			p->a = param[n].a;
+			p->b = param[n].b;
+			p->c = param[n].c;
+			break;
+		case TEE_PARAM_ATTR_TYPE_MEMREF_OUTPUT:
+		case TEE_PARAM_ATTR_TYPE_MEMREF_INOUT:
+			LOG_WRN("Memref params are not fully tested");
+			p->a = param[n].a;
+			p->b = param[n].b;
+			p->c = param[n].c;
+			break;
+		default:
+			break;
+		}
+	}
+	req->ret = ret;
+
+	/* Let the requesting thread continue */
+	k_mutex_lock(&supp->mutex, K_FOREVER);
+	supp->current = NULL;
+	k_mutex_unlock(&supp->mutex);
+	k_sem_give(&req->complete);
+
 	return 0;
 }
 
@@ -919,6 +1100,9 @@ static int optee_init(const struct device *dev)
 	 */
 
 	sys_dlist_init(&data->notif);
+	k_mutex_init(&optee_data.supp.mutex);
+	k_sem_init(&optee_data.supp.reqs_c, 0, 1);
+	sys_dlist_init(&optee_data.supp.reqs);
 
 	return 0;
 }
