@@ -349,7 +349,7 @@ typedef int (*tee_shm_unregister_t)(const struct device *dev, struct tee_shm *sh
  *
  * See @a tee_suppl_recv() for argument definitions.
  */
-typedef int (*tee_suppl_recv_t)(const struct device *dev, uint32_t func, unsigned int num_params,
+typedef int (*tee_suppl_recv_t)(const struct device *dev, uint32_t *func, unsigned int *num_params,
 				struct tee_param *param);
 
 /**
@@ -359,7 +359,7 @@ typedef int (*tee_suppl_recv_t)(const struct device *dev, uint32_t func, unsigne
  *
  * See @a tee_suppl_send() for argument definitions.
  */
-typedef int (*tee_suppl_send_t)(const struct device *dev, unsigned int num_params,
+typedef int (*tee_suppl_send_t)(const struct device *dev, unsigned int ret, unsigned int num_params,
 				struct tee_param *param);
 
 __subsystem struct tee_driver_api {
@@ -639,11 +639,11 @@ static inline int z_impl_tee_shm_free(const struct device *dev, struct tee_shm *
  *
  * @retval 0       On success, negative on error
  */
-__syscall int tee_suppl_recv(const struct device *dev, uint32_t func, unsigned int num_params,
+__syscall int tee_suppl_recv(const struct device *dev, uint32_t *func, unsigned int *num_params,
 			     struct tee_param *param);
 
-static inline int z_impl_tee_suppl_recv(const struct device *dev, uint32_t func,
-					unsigned int num_params, struct tee_param *param)
+static inline int z_impl_tee_suppl_recv(const struct device *dev, uint32_t *func,
+					unsigned int *num_params, struct tee_param *param)
 {
 	const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
 
@@ -666,11 +666,11 @@ static inline int z_impl_tee_suppl_recv(const struct device *dev, uint32_t func,
  *
  * @retval 0       On success, negative on error
  */
-__syscall int tee_suppl_send(const struct device *dev, unsigned int num_params,
+__syscall int tee_suppl_send(const struct device *dev, unsigned int ret, unsigned int num_params,
 			     struct tee_param *param);
 
-static inline int z_impl_tee_suppl_send(const struct device *dev, unsigned int num_params,
-					struct tee_param *param)
+static inline int z_impl_tee_suppl_send(const struct device *dev, unsigned int ret,
+				unsigned int num_params, struct tee_param *param)
 {
 	const struct tee_driver_api *api = (const struct tee_driver_api *)dev->api;
 
@@ -678,7 +678,7 @@ static inline int z_impl_tee_suppl_send(const struct device *dev, unsigned int n
 		return -ENOSYS;
 	}
 
-	return api->suppl_send(dev, num_params, param);
+	return api->suppl_send(dev, ret, num_params, param);
 }
 
 #ifdef __cplusplus

@@ -876,13 +876,13 @@ static int optee_shm_unregister(const struct device *dev, struct tee_shm *shm)
 	return rc;
 }
 
-static int optee_suppl_recv(const struct device *dev, uint32_t func, unsigned int num_params,
+static int optee_suppl_recv(const struct device *dev, uint32_t *func, unsigned int *num_params,
 			    struct tee_param *param)
 {
 	return 0;
 }
 
-static int optee_suppl_send(const struct device *dev, unsigned int num_params,
+static int optee_suppl_send(const struct device *dev, unsigned int ret, unsigned int num_params,
 			    struct tee_param *param)
 {
 	return 0;
