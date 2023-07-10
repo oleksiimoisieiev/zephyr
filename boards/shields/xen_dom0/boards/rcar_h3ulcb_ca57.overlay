@@ -36,8 +36,51 @@
 	 * Xen passes actual values for setup in domain device tree, but Zephyr
 	 * is not capable to parse and handle it in runtime.
 	 */
-	ram: memory@60000000 {
+	ram: memory@70000000 {
 		device_type = "mmio-sram";
-		reg = <0x00 0x60000000 0x00 DT_SIZE_M(256)>;
+		reg = <0x00 0x70000000 0x00 DT_SIZE_M(256)>;
+	};
+
+	fstab {
+		compatible = "zephyr,fstab";
+		storage: storage {
+			compatible = "zephyr,fstab,littlefs";
+			mount-point = "/tee";
+			partition = <&storage_partition>;
+			automount;
+			read-size = <16>;
+			prog-size = <16>;
+			cache-size = <64>;
+			lookahead-size = <32>;
+			block-cycles = <512>;
+			status = "okay";
+		};
+	};
+
+	flashcontroller0: flashcontroller {
+		compatible = "zephyr,sim-flash";
+		label = "FLASH_SIMULATOR";
+		#address-cells = <1>;
+		#size-cells = <1>;
+		erase-value = <0xff>;
+		flash_sim0: flash_sim@0 {
+			compatible = "soc-nv-flash";
+			reg = <0x00000000 DT_SIZE_M(16)>;
+			erase-block-size = <1024>;
+			write-block-size = <4>;
+			partitions {
+				compatible = "fixed-partitions";
+				#address-cells = <1>;
+				#size-cells = <1>;
+				/*
+				* Storage partition will be used by FCB/LittleFS/NVS
+				* if enabled.
+				*/
+				storage_partition: partition@1000 {
+					label = "storage";
+					reg = <0x00000000 DT_SIZE_M(16)>;
+				};
+			};
+		};
 	};
 };
