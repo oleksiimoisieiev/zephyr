@@ -1,0 +1,16 @@
+identifier: rz_a2m
+name: Cortex A9 for Renesas RZ/A2M
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - clock_control
+  - uart
+testing:
+  default: true
+  ignore_tags:
+    - net
+    - bluetooth
+    - isotp

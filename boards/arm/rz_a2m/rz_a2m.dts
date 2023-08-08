@@ -1,0 +1,33 @@
+/*
+ * Copyright (c) 2023 EPAM Systems
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/dts-v1/;
+#include <arm/renesas/rz/r7s9210.dtsi>
+#include <freq.h>
+
+/ {
+	model = "Renesas RZ A2M board";
+	compatible = "renesas,rz-a2m";
+
+	chosen {
+		zephyr,sram = &ram;
+	};
+
+	ram: memory@80000000 {
+		compatible = "mmio-sram";
+		reg = <0x80000000 DT_SIZE_M(4)		 /* 4  Mbyte of Internal RAM */
+		       0x40000000 DT_SIZE_M(8)		 /* 8  Mbyte of External HyperRAM */
+		       0x0C000000 DT_SIZE_M(64)>;	 /* 64 Mbyte of External SDRAM */
+	};
+};
+
+&extal_clk {
+	clock-frequency = <DT_FREQ_M(24)>;
+};
+
+&ostm1 {
+	status = "okay";
+};

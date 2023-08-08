@@ -1,0 +1,6 @@
+# Copyright (c) 2023 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_RZ_A2M
+	bool "Cortex-A9 for Renesas RZ A2M"
+	depends on SOC_R7S9210
