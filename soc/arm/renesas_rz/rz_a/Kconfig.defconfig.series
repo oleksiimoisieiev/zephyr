@@ -1,0 +1,37 @@
+# Renesas RZ A2M SoC line
+
+# Copyright (c) 2023 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_SERIES_RZ_A
+
+config SOC_SERIES
+	default "rz_a"
+
+config NUM_IRQS
+	default 512
+
+config ARM_HAS_GLOBAL_MONITOR
+	default n
+	help
+	  Cortex A9 reference manual says (ARM DDI 0388G):
+	  The L1 memory system of the Cortex-A9 processor has a local monitor. This is a 2-state, open
+	  and exclusive, state machine that manages load/store exclusive (LDREXB, LDREXH, LDREX, LDREXD,
+	  STREXB, STREXH, STREX and STREXD) accesses and clear exclusive (CLREX) instructions.
+
+	  At the same time L2 cache PL310 reference manual says (ARM DDI 0246H):
+	  The cache controller supports cacheable and non-cacheable exclusive accesses but does not
+	  provide an exclusive monitor. The system integrator must implement external exclusive
+	  monitors as follows, so that the cache controller can return an EXOKAY response.
+
+	  And, finally, "RZ/A2M Group User’s Manual: Hardware" (R01UH0746EJ0400 Rev.4.00) says:
+	  This LSI does not support atomic access. This restriction means that instructions for
+	  exclusive access (LDREX, STREX, LDREXB, STREXB, LDREXD, STREXD, LDREXH, STREXH) and semaphore
+	  instructions (SWP, SWPB) cannot be used by the Cortex-A9 in the internal non-cacheable areas.
+
+	  From the previous explanations, it's evident that only the L1 cache has the local monitor,
+	  allowing us to utilize exclusive operations solely on cached memory within L1 that lacks the
+	  Shareable attribute. For further details, you can refer to the description of the
+	  corresponding configuration for ARM32 MMU.
+
+endif # SOC_SERIES_RZ_A

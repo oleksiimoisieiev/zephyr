@@ -1,0 +1,17 @@
+# Renesas RZ SoC line
+
+# Copyright (c) 2023 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+config SOC_FAMILY_RZ
+	bool
+
+if SOC_FAMILY_RZ
+
+config SOC_FAMILY
+	string
+	default "renesas_rz"
+
+source "soc/arm/renesas_rz/*/Kconfig.soc"
+
+endif # SOC_FAMILY_RZ

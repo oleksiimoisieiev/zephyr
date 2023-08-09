@@ -1,0 +1,11 @@
+# Copyright (c) 2023 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+choice
+	prompt "Renesas RZ A2M SoC Selection"
+	depends on SOC_SERIES_RZ_A
+
+config SOC_R7S9210
+	bool "R7S9210"
+
+endchoice

@@ -1,0 +1,9 @@
+# Copyright (c) 2023 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_R7S9210
+
+config SOC
+	default "r7s9210"
+
+endif # SOC_R7S9210

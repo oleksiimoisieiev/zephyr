@@ -1,0 +1,91 @@
+/*
+ * Copyright (c) 2023 EPAM Systems
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <mem.h>
+#include <arm/armv7-a.dtsi>
+#include <zephyr/dt-bindings/interrupt-controller/arm-gic.h>
+#include <zephyr/dt-bindings/clock/renesas_cpg_mssr.h>
+#include <zephyr/dt-bindings/clock/r7s9210_cpg_mssr.h>
+
+/ {
+	compatible = "renesas,r7s9210";
+	interrupt-parent = <&gic>;
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-a9";
+			reg = <0>;
+		};
+	};
+
+	extal_clk: extal {
+		#clock-cells = <0>;
+		compatible = "fixed-clock";
+		/* Value must be set by board */
+		clock-frequency = <0>;
+	};
+
+	soc {
+		compatible = "simple-bus";
+		interrupt-parent = <&gic>;
+
+		#address-cells = <1>;
+		#size-cells = <1>;
+		ranges;
+
+		gic: interrupt-controller@e8221000 {
+			compatible = "arm,gic-400", "arm,gic-v2", "arm,gic";
+			#interrupt-cells = <4>;
+			#address-cells = <0>;
+			interrupt-controller;
+			reg = <0xe8221000 0x1000>,
+			      <0xe8222000 0x1000>;
+		};
+
+		cpg: clock-controller@fcfe0010 {
+			compatible = "renesas,r7s9210-cpg-mssr";
+			reg = <0xfcfe0010 0x455>;
+			#clock-cells = <2>;
+			clocks = <&extal_clk>;
+		};
+
+		/* By default, this timer can only be accessed from security mode. If you wish to
+		 * enable access to it from non-secure mode, you will need to modify the SLVACCCTL1
+		 * AXI register.
+		 * See, RZ/A2M Group User’s Manual: Hardware (R01UH0746EJ0400 Rev.4.00)
+		 * 5.11.26 Slave Access Control Register 1 (SLVACCCTL1)
+		 */
+		ostm0: timer@e803b000 {
+			compatible = "renesas,ostm";
+			reg = <0xe803b000 0x30>;
+			interrupts = <GIC_SPI 56 IRQ_TYPE_LEVEL IRQ_DEFAULT_PRIORITY>;
+			clocks = <&cpg CPG_MOD 36>;
+			status = "disabled";
+		};
+
+		ostm1: timer@e803c000 {
+			compatible = "renesas,ostm";
+			reg = <0xe803c000 0x30>;
+			interrupts = <GIC_SPI 57 IRQ_TYPE_EDGE IRQ_DEFAULT_PRIORITY>;
+			clocks = <&cpg CPG_MOD 35>;
+			status = "disabled";
+		};
+
+		ostm2: timer@e803d000 {
+			compatible = "renesas,ostm";
+			reg = <0xe803d000 0x30>;
+			interrupts = <GIC_SPI 58 IRQ_TYPE_EDGE IRQ_DEFAULT_PRIORITY>;
+			clocks = <&cpg CPG_MOD 34>;
+			status = "disabled";
+		};
+	};
+};
