@@ -16,45 +16,6 @@
 #include <zephyr/logging/log.h>
 LOG_MODULE_REGISTER(clock_control_renesas);
 
-static void rcar_cpg_reset(uint32_t base_address, uint32_t reg, uint32_t bit)
-{
-	rcar_cpg_write(base_address, srcr[reg], BIT(bit));
-	rcar_cpg_write(base_address, SRSTCLR(reg), BIT(bit));
-}
-
-void rcar_cpg_write(uint32_t base_address, uint32_t reg, uint32_t val)
-{
-	sys_write32(~val, base_address + CPGWPR);
-	sys_write32(val, base_address + reg);
-	/* Wait for at least one cycle of the RCLK clock (@ ca. 32 kHz) */
-	k_sleep(K_USEC(35));
-}
-
-int rcar_cpg_mstp_clock_endisable(uint32_t base_address, uint32_t module, bool enable)
-{
-	uint32_t reg = module / 100;
-	uint32_t bit = module % 100;
-	uint32_t bitmask = BIT(bit);
-	uint32_t reg_val;
-
-	__ASSERT((bit < 32) && reg < ARRAY_SIZE(mstpcr), "Invalid module number for cpg clock: %d",
-		 module);
-
-	reg_val = sys_read32(base_address + mstpcr[reg]);
-	if (enable) {
-		reg_val &= ~bitmask;
-	} else {
-		reg_val |= bitmask;
-	}
-
-	sys_write32(reg_val, base_address + mstpcr[reg]);
-	if (!enable) {
-		rcar_cpg_reset(base_address, reg, bit);
-	}
-
-	return 0;
-}
-
 static int cmp_cpg_clk_info_table_items(const void *key, const void *element)
 {
 	const struct cpg_clk_info_table *e = element;
@@ -93,7 +54,6 @@ static void renesas_cpg_get_div_and_mul(const struct device *dev,
 					 uint32_t *multiplier)
 {
 	mem_addr_t reg_addr;
-	mm_reg_t reg_val;
 	struct renesas_cpg_mssr_data *data = dev->data;
 
 	*divider = RENESAS_CPG_NONE;
@@ -111,15 +71,14 @@ static void renesas_cpg_get_div_and_mul(const struct device *dev,
 	}
 
 	reg_addr += DEVICE_MMIO_GET(dev);
-	reg_val = sys_read32(reg_addr);
 
 	if (data->get_div_helper) {
-		*divider = data->get_div_helper(reg_val, clk_info->module);
+		*divider = data->get_div_helper(reg_addr, clk_info->module);
 	}
 
 get_mul:
 	if (data->get_mul_helper) {
-		*multiplier = data->get_mul_helper(reg_val, clk_info->module);
+		*multiplier = data->get_mul_helper(reg_addr, clk_info->module);
 	} else {
 		*multiplier = 1;
 	}
@@ -280,7 +239,6 @@ int renesas_cpg_set_rate(const struct device *dev, clock_control_subsys_t sys,
 	struct renesas_cpg_mssr_data *data;
 	int64_t in_freq;
 	uint32_t divider;
-	uint32_t div_mask;
 	uint32_t module;
 	uintptr_t u_rate = (uintptr_t)rate;
 
@@ -325,15 +283,10 @@ int renesas_cpg_set_rate(const struct device *dev, clock_control_subsys_t sys,
 		goto unlock;
 	}
 
-	ret = data->set_rate_helper(module, &divider, &div_mask);
+	ret = data->set_rate_helper(dev, clk_info, divider);
 	if (!ret) {
 		int64_t out_rate;
-		uint32_t reg = sys_read32(clk_info->offset + DEVICE_MMIO_GET(dev));
 
-		reg &= ~div_mask;
-		rcar_cpg_write(DEVICE_MMIO_GET(dev), clk_info->offset, reg | divider);
-
-		clk_info->out_freq = RENESAS_CPG_NONE;
 		clk_info->out_freq = RENESAS_CPG_NONE;
 
 		out_rate = renesas_cpg_get_out_freq(dev, clk_info);

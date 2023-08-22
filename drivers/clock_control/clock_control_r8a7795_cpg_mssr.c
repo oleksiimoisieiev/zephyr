@@ -14,6 +14,7 @@
 #include <zephyr/dt-bindings/clock/renesas_cpg_mssr.h>
 #include <zephyr/dt-bindings/clock/r8a7795_cpg_mssr.h>
 #include <zephyr/irq.h>
+#include <zephyr/kernel.h>
 #include "clock_control_renesas_cpg_mssr.h"
 #include <zephyr/logging/log.h>
 
@@ -29,6 +30,12 @@ LOG_MODULE_DECLARE(clock_control_renesas);
 
 #define R8A7795_CLK_CANFD_STOP_BIT 8
 #define R8A7795_CLK_CANFD_DIV_MASK 0x3f
+
+/* Software Reset Clearing Register offsets */
+#define SRSTCLR(i)      (0x940 + (i) * 4)
+
+/* CPG write protect offset */
+#define CPGWPR          0x900
 
 struct r8a7795_cpg_mssr_config {
 	DEVICE_MMIO_ROM; /* Must be first */
@@ -79,6 +86,59 @@ static struct cpg_clk_info_table mod_props[] = {
 	RENESAS_MOD_CLK_INFO_ITEM(313, R8A7795_CLK_SD1),
 	RENESAS_MOD_CLK_INFO_ITEM(314, R8A7795_CLK_SD0),
 };
+
+/* Realtime Module Stop Control Register offsets */
+static const uint16_t mstpcr[] = {
+	0x110, 0x114, 0x118, 0x11c,
+	0x120, 0x124, 0x128, 0x12c,
+	0x980, 0x984, 0x988, 0x98c,
+};
+
+/* Software Reset Register offsets */
+static const uint16_t srcr[] = {
+	0x0A0, 0x0A8, 0x0B0, 0x0B8,
+	0x0BC, 0x0C4, 0x1C8, 0x1CC,
+	0x920, 0x924, 0x928, 0x92C,
+};
+
+static void rcar_cpg_write(uint32_t base_address, uint32_t reg, uint32_t val)
+{
+	sys_write32(~val, base_address + CPGWPR);
+	sys_write32(val, base_address + reg);
+	/* Wait for at least one cycle of the RCLK clock (@ ca. 32 kHz) */
+	k_sleep(K_USEC(35));
+}
+
+static void rcar_cpg_reset(uint32_t base_address, uint32_t reg, uint32_t bit)
+{
+	rcar_cpg_write(base_address, srcr[reg], BIT(bit));
+	rcar_cpg_write(base_address, SRSTCLR(reg), BIT(bit));
+}
+
+static int rcar_cpg_mstp_clock_endisable(uint32_t base_address, uint32_t module, bool enable)
+{
+	uint32_t reg = module / 100;
+	uint32_t bit = module % 100;
+	uint32_t bitmask = BIT(bit);
+	uint32_t reg_val;
+
+	__ASSERT((bit < 32) && reg < ARRAY_SIZE(mstpcr), "Invalid module number for cpg clock: %d",
+		 module);
+
+	reg_val = sys_read32(base_address + mstpcr[reg]);
+	if (enable) {
+		reg_val &= ~bitmask;
+	} else {
+		reg_val |= bitmask;
+	}
+
+	sys_write32(reg_val, base_address + mstpcr[reg]);
+	if (!enable) {
+		rcar_cpg_reset(base_address, reg, bit);
+	}
+
+	return 0;
+}
 
 static int r8a7795_cpg_enable_disable_core(const struct device *dev,
 					struct cpg_clk_info_table *clk_info,
@@ -180,9 +240,10 @@ static int r8a7795_cpg_mssr_start_stop(const struct device *dev,
 	return ret;
 }
 
-static uint32_t r8a7795_get_div_helper(uint32_t reg_val, uint32_t module)
+static uint32_t r8a7795_get_div_helper(mem_addr_t reg_addr, uint32_t module)
 {
 	uint32_t divider = RENESAS_CPG_NONE;
+	uint32_t reg_val = sys_read32(reg_addr);
 
 	switch (module) {
 	case R8A7795_CLK_SD0H:
@@ -217,20 +278,23 @@ static uint32_t r8a7795_get_div_helper(uint32_t reg_val, uint32_t module)
 	return divider;
 }
 
-static int r8a7795_set_rate_helper(uint32_t module, uint32_t *divider, uint32_t *div_mask)
+static int r8a7795_set_rate_helper(const struct device *dev,
+				   struct cpg_clk_info_table *clk_info,
+				   uint32_t divider)
 {
+	uint32_t div_mask;
 	int ret = -ENOTSUP;
 
-	switch (module) {
+	switch (clk_info->module) {
 	case R8A7795_CLK_SD0:
 	case R8A7795_CLK_SD1:
 	case R8A7795_CLK_SD2:
 	case R8A7795_CLK_SD3:
 		/* possible to have only 2 or 4 */
-		if (*divider == 2 || *divider == 4) {
+		if (divider == 2 || divider == 4) {
 			/* convert 2/4 to 0/1 */
-			*divider >>= 2;
-			*div_mask = R8A7795_CLK_SD_DIV_MASK << R8A7795_CLK_SD_DIV_SHIFT;
+			divider >>= 2;
+			div_mask = R8A7795_CLK_SD_DIV_MASK << R8A7795_CLK_SD_DIV_SHIFT;
 			ret = 0;
 		} else {
 			ret = -EINVAL;
@@ -241,27 +305,34 @@ static int r8a7795_set_rate_helper(uint32_t module, uint32_t *divider, uint32_t 
 	case R8A7795_CLK_SD2H:
 	case R8A7795_CLK_SD3H:
 		/* divider should be power of two and max possible value 16 */
-		if (!is_power_of_two(*divider) || *divider > 16) {
+		if (!is_power_of_two(divider) || divider > 16) {
 			ret = -EINVAL;
 			break;
 		}
 		ret = 0;
 		/* 1,2,4,8,16 have to be converted to 0,1,2,3,4 and then shifted */
-		*divider = (find_lsb_set(*divider) - 1) << R8A7795_CLK_SDH_DIV_SHIFT;
-		*div_mask = R8A7795_CLK_SDH_DIV_MASK << R8A7795_CLK_SDH_DIV_SHIFT;
+		divider = (find_lsb_set(divider) - 1) << R8A7795_CLK_SDH_DIV_SHIFT;
+		div_mask = R8A7795_CLK_SDH_DIV_MASK << R8A7795_CLK_SDH_DIV_SHIFT;
 		break;
 	case R8A7795_CLK_CANFD:
 		/* according to documentation, divider value stored in reg is equal to: val + 1 */
-		*divider -= 1;
-		if (*divider <= R8A7795_CLK_CANFD_DIV_MASK) {
+		divider -= 1;
+		if (divider <= R8A7795_CLK_CANFD_DIV_MASK) {
 			ret = 0;
-			*div_mask = R8A7795_CLK_CANFD_DIV_MASK;
+			div_mask = R8A7795_CLK_CANFD_DIV_MASK;
 		} else {
 			ret = -EINVAL;
 		}
 		break;
 	default:
 		break;
+	}
+
+	if (ret == 0) {
+		uint32_t reg = sys_read32(clk_info->offset + DEVICE_MMIO_GET(dev));
+
+		reg &= ~div_mask;
+		rcar_cpg_write(DEVICE_MMIO_GET(dev), clk_info->offset, reg | divider);
 	}
 
 	return ret;
