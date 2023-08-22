@@ -65,7 +65,7 @@ zephyr_library_sources_ifdef(CONFIG_SOC_SERIES_AGILEX clock_agilex.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_AGILEX5 clock_control_agilex5_ll.c)
 zephyr_library_sources_ifdef(CONFIG_CLOCK_CONTROL_AGILEX5 clock_control_agilex5.c)
 
-if(CONFIG_CLOCK_CONTROL_RCAR_CPG_MSSR)
+if(CONFIG_CLOCK_CONTROL_RENESAS_CPG_MSSR)
   zephyr_library_sources(clock_control_renesas_cpg_mssr.c)
   zephyr_library_sources_ifdef(CONFIG_DT_HAS_RENESAS_R8A7795_CPG_MSSR_ENABLED clock_control_r8a7795_cpg_mssr.c)
 endif()
