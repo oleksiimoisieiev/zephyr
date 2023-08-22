@@ -40,6 +40,7 @@ struct renesas_cpg_mssr_data {
 	struct k_spinlock lock;
 
 	uint32_t (*get_div_helper)(uint32_t reg, uint32_t module);
+	uint32_t (*get_mul_helper)(uint32_t reg, uint32_t module);
 	int (*set_rate_helper)(uint32_t module, uint32_t *div, uint32_t *div_mask);
 };
 

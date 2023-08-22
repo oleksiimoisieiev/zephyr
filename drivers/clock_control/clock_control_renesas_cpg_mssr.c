@@ -87,47 +87,60 @@ renesas_cpg_find_clk_info_by_module_id(const struct device *dev, uint32_t domain
 	return item;
 }
 
-static uint32_t rcar_cpg_get_divider(const struct device *dev, struct cpg_clk_info_table *clk_info)
+static void renesas_cpg_get_div_and_mul(const struct device *dev,
+					 struct cpg_clk_info_table *clk_info,
+					 uint32_t *divider,
+					 uint32_t *multiplier)
 {
 	mem_addr_t reg_addr;
 	mm_reg_t reg_val;
-	uint32_t divider = RENESAS_CPG_NONE;
 	struct renesas_cpg_mssr_data *data = dev->data;
 
+	*divider = RENESAS_CPG_NONE;
 	if (clk_info->domain == CPG_MOD) {
-		return 1;
+		*divider = 1;
+		return;
 	}
 
 	reg_addr = clk_info->offset;
 	if (reg_addr == RENESAS_CPG_NONE) {
 		/* if we don't have valid offset, in is equal to out */
-		return 1;
+		*divider = 1;
+		/* we can still have valid multiplier, for example, PLL */
+		goto get_mul;
 	}
 
 	reg_addr += DEVICE_MMIO_GET(dev);
 	reg_val = sys_read32(reg_addr);
 
 	if (data->get_div_helper) {
-		divider = data->get_div_helper(reg_val, clk_info->module);
+		*divider = data->get_div_helper(reg_val, clk_info->module);
 	}
 
-	if (!divider) {
-		return RENESAS_CPG_NONE;
+get_mul:
+	if (data->get_mul_helper) {
+		*multiplier = data->get_mul_helper(reg_val, clk_info->module);
+	} else {
+		*multiplier = 1;
 	}
 
-	return divider;
+	if (!*divider) {
+		*divider = RENESAS_CPG_NONE;
+	}
 }
 
 static int renesas_cpg_update_out_freq(const struct device *dev,
 				       struct cpg_clk_info_table *clk_info)
 {
-	uint32_t divider = rcar_cpg_get_divider(dev, clk_info);
+	uint32_t divider, multiplier = 1;
 
+	renesas_cpg_get_div_and_mul(dev, clk_info, &divider, &multiplier);
 	if (divider == RENESAS_CPG_NONE) {
 		return -EINVAL;
 	}
 
-	clk_info->out_freq = clk_info->in_freq / divider;
+	clk_info->out_freq = clk_info->in_freq * multiplier;
+	clk_info->out_freq /= divider;
 	return 0;
 }
 
