@@ -68,10 +68,26 @@ The default configuration can be found in the defconfig file:
 Programming and Debugging
 *************************
 
+Applications for the ``rz_a2m`` board configuration can be
+built and flashed in the usual way (see :ref:`build_an_application`
+and :ref:`application_run` for more details); as board has internal Segger
+J-Link for debug purposes.
+
 Flashing
 ========
 
-The flash on board is not supported by Zephyr at this time.
+Follow the instructions in the :ref:`nordic_segger` page to install
+and configure all the necessary software. Further information can be
+found in :ref:`nordic_segger_flashing`. Then build and flash
+applications as usual (see :ref:`build_an_application` and
+:ref:`application_run` for more details).
+
+Here is an example for the :ref:`blinky-sample` application.
+
+.. zephyr-app-commands::
+   :zephyr-app: samples/basic/blinky
+   :board: rz_a2m
+   :goals: build flash
 
 References
 **********

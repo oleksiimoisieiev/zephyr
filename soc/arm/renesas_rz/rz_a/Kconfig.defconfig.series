@@ -34,4 +34,13 @@ config ARM_HAS_GLOBAL_MONITOR
 	  Shareable attribute. For further details, you can refer to the description of the
 	  corresponding configuration for ARM32 MMU.
 
+# we want to get correct flash size and address even if XIP is disabled
+config FLASH_SIZE
+	int "Flash Size in kB"
+	default $(dt_chosen_reg_size_int,$(DT_CHOSEN_Z_FLASH),0,K)
+
+config FLASH_BASE_ADDRESS
+	hex "Flash Base Address"
+	default $(dt_chosen_reg_addr_hex,$(DT_CHOSEN_Z_FLASH))
+
 endif # SOC_SERIES_RZ_A
