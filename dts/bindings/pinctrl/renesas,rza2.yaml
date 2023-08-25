@@ -1,0 +1,36 @@
+# Copyright (c) 2023 Epam Systems
+# SPDX-License-Identifier: Apache-2.0
+
+description: |
+    Renesas RZ/A2 compined Pin Function and GPIO Controller node
+    Pin multiplexing and GPIO configuration is performed on a per-pin basis.
+    Each port features up to 8 pins, each of them configurable for GPIO function
+    (port mode) or in alternate function mode.
+    Up to 8 different alternate function modes exist for each single pin.
+
+compatible: "renesas,r7s9210-pinctrl"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+
+  reg-names:
+    required: true
+
+child-binding:
+  description: |
+     This binding gives a base representation of the RZ/A2 pinmux configuration and GPIO ports description.
+
+  include:
+    - name: pincfg-node.yaml
+
+  properties:
+    pinmux:
+      type: array
+      required: true
+      description: |
+        Values are constructed from GPIO port number, pin number, and
+        alternate function configuration number using the RZA2_PINMUX()
+        helper macro in pinctrl-r7s9210.h.

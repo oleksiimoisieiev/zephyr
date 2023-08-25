@@ -1,0 +1,19 @@
+# Copyright (c) 2021 IoT.bzh
+# SPDX-License-Identifier: Apache-2.0
+
+config PINCTRL_RZA2
+	bool "Pin controller driver for Renesas RZA2 series"
+	default y
+	depends on DT_HAS_RENESAS_R7S9210_PINCTRL_ENABLED
+	help
+	  Enable pin controller driver for Renesas RZA2
+
+if PINCTRL_RZA2
+
+config PINCTRL_RZA2_INIT_PRIORITY
+	int "RZA2 pinctrl init priority"
+	default 35
+	help
+	  Device driver initialization priority.
+
+endif #PINCTRL_RZA2
