@@ -87,5 +87,174 @@
 			clocks = <&cpg CPG_MOD 34>;
 			status = "disabled";
 		};
+
+		pinctrl: pin-controller@fcffe000 {
+			compatible = "renesas,r7s9210-pinctrl";
+			reg = <0xfcffe000 0x40>, <0xfcffe080 0xf80>;
+			reg-names = "pdr", "pinctrl";
+		};
+
+		gpio: gpio-controller@fcffe040{
+			compatible = "renesas,r7s9210-gpio";
+			reg = <0xfcffe040 0x40>;
+			#address-cells = <1>;
+			#size-cells = <0>;
+
+			port0: gpio@0 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x0>; /* PORT0 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+
+			port1: gpio@1 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x1>; /* PORT1 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port2: gpio@2 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x2>; /* PORT2 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port3: gpio@3 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x3>; /* PORT3 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port4: gpio@4 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x4>; /* PORT4 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port5: gpio@5 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x5>; /* PORT5 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port6: gpio@6 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x6>; /* PORT6 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port7: gpio@7 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x7>; /* PORT7 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port8: gpio@8 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x8>; /* PORT8 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			port9: gpio@9 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x9>; /* PORT9 */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			porta: gpio@a {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0xa>; /* PORTA */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portb: gpio@b {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0xb>; /* PORTB */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portc: gpio@c {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0xc>; /* PORTC */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portd: gpio@d {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0xd>; /* PORTD */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			porte: gpio@e {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0xe>; /* PORTE */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portf: gpio@f {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0xf>; /* PORTF */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portg: gpio@10 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x10>; /* PORTG */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			porth: gpio@11 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x11>; /* PORTH */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portj: gpio@12 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x12>; /* PORTJ */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portk: gpio@13 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x13>; /* PORTK */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portl: gpio@14 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x14>; /* PORTL */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+			portm: gpio@15 {
+				compatible = "renesas,r7s9210-gpio-port";
+				reg = <0x15>; /* PORTM */
+				gpio-controller;
+				#gpio-cells=<2>;
+				ngpios = <8>;
+			};
+		};
 	};
 };
