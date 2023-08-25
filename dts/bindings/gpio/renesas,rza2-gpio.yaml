@@ -1,0 +1,17 @@
+description: Reneses RZ/A2 GPIO node
+
+compatible: "renesas,r7s9210-gpio"
+
+include: base.yaml
+
+properties:
+  reg:
+    required: true
+    description: |
+      GPIO region for I/O operations.
+
+  "#address-cells":
+    const: 1
+
+  "#size-cells":
+    const: 0

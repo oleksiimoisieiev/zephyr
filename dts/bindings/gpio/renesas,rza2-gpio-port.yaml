@@ -1,0 +1,19 @@
+description: Reneses RZ/A2 GPIO port node
+
+compatible: "renesas,r7s9210-gpio-port"
+
+include: [gpio-controller.yaml, base.yaml]
+
+properties:
+  reg:
+    required: true
+    description: |
+      GPIO port number. RZA2 board has a number of ports that
+      are used to calculate correct pin number.
+
+  "#gpio-cells":
+    const: 2
+
+gpio-cells:
+  - pin
+  - flags

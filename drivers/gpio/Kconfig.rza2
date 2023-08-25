@@ -1,0 +1,23 @@
+# Renesas RZA2 configuration options
+
+# Copyright (c) 2023 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+config GPIO_RZA2
+	bool "Renesas RZA2 GPIO port"
+	default y
+	depends on DT_HAS_RENESAS_R7S9210_GPIO_PORT_ENABLED
+	select PINCTRL
+	help
+	  Enable Renesas RZA2 GPIO driver.
+
+if GPIO_RZA2
+
+config GPIO_RZA2_PORT_INIT_PRIORITY
+	int "RZA2 GPIO port init priority"
+	default 40
+	help
+	  Device driver initialization priority. The priority should be lower
+	  than PINCTRL_RZA2_INIT_PRIORITY device.
+
+endif #GPIO_RZA2

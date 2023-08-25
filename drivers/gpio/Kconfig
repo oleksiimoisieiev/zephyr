@@ -149,6 +149,8 @@ source "drivers/gpio/Kconfig.eos_s3"
 
 source "drivers/gpio/Kconfig.rcar"
 
+source "drivers/gpio/Kconfig.rza2"
+
 source "drivers/gpio/Kconfig.cy8c95xx"
 
 source "drivers/gpio/Kconfig.creg_gpio"
