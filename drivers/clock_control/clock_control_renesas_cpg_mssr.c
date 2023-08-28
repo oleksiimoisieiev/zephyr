@@ -319,14 +319,14 @@ void renesas_cpg_build_clock_relationship(const struct device *dev)
 	key = k_spin_lock(&data->lock);
 	for (domain = 0; domain < CPG_NUM_DOMAINS; domain++) {
 		uint32_t idx;
-		uint32_t prev_mod_id = 0;
+		int32_t prev_mod_id = -1;
 		struct cpg_clk_info_table *item = data->clk_info_table[domain];
 
 		for (idx = 0; idx < data->clk_info_table_size[domain]; idx++, item++) {
 			struct cpg_clk_info_table *parent;
 
 			/* check if an array is sorted by module id or not */
-			if (prev_mod_id >= item->module) {
+			if (prev_mod_id >= (int32_t)item->module) {
 				LOG_ERR("%s: clocks have to be sorted inside clock table in "
 					"ascending order by module id field, domain %u "
 					"module id %u",
