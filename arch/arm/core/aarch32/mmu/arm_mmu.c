@@ -297,10 +297,13 @@ static struct arm_mmu_perms_attrs arm_mmu_convert_attr_flags(uint32_t attrs)
 		perms_attrs.cacheable = 0;
 		perms_attrs.domain    = ARM_MMU_DOMAIN_DEVICE;
 
+#ifdef CONFIG_ARM_HAS_GLOBAL_MONITOR
 		if (attrs & MATTR_SHARED) {
 			perms_attrs.tex        = 0;
 			perms_attrs.bufferable = 1;
-		} else {
+		} else
+#endif
+		{
 			perms_attrs.tex        = 2;
 			perms_attrs.bufferable = 0;
 		}
@@ -313,10 +316,12 @@ static struct arm_mmu_perms_attrs arm_mmu_convert_attr_flags(uint32_t attrs)
 		perms_attrs.tex |= ARM_MMU_TEX2_CACHEABLE_MEMORY;
 		perms_attrs.domain = ARM_MMU_DOMAIN_OS;
 
+#ifdef CONFIG_ARM_HAS_GLOBAL_MONITOR
 		/* For normal memory, shareability depends on the S bit */
 		if (attrs & MATTR_SHARED) {
 			perms_attrs.shared = 1;
 		}
+#endif
 
 		if (attrs & MATTR_CACHE_OUTER_WB_WA) {
 			perms_attrs.tex |= ARM_MMU_TEX_CACHE_ATTRS_WB_WA;
@@ -809,9 +814,11 @@ int z_arm_mmu_init(void)
 	 * Set IRGN, RGN, S in TTBR0 based on the configuration of the
 	 * memory area the actual page tables are located in.
 	 */
+#ifdef CONFIG_ARM_HAS_GLOBAL_MONITOR
 	if (pt_attrs & MATTR_SHARED) {
 		reg_val |= ARM_MMU_TTBR_SHAREABLE_BIT;
 	}
+#endif
 
 	if (pt_attrs & MATTR_CACHE_OUTER_WB_WA) {
 		reg_val |= (ARM_MMU_TTBR_RGN_OUTER_WB_WA_CACHEABLE <<

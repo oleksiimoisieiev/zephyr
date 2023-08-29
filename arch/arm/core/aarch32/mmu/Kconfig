@@ -32,4 +32,34 @@ config ARM_MMU_REGION_MIN_ALIGN_AND_SIZE
 	  Minimum size (and alignment) of an ARM MMU page.
 	  This value should not be modified.
 
+config ARM_HAS_GLOBAL_MONITOR
+	depends on ARM_AARCH32_MMU
+	bool "ARMv7 Cortex A has global monitor or not"
+	default y
+	help
+	  The Shareable attribute of memory can lead to the failure of exclusive operations in cases
+	  where the Global Monitor isn't implemented. To ensure successful execution of exclusive
+	  operations, it's necessary to disable the effects of the shareable attribute on such systems,
+	  see ARM DDI 0406C.d Exclusive access instructions and Non-shareable memory regions:
+	  For memory regions that do not have the Shareable attribute, the exclusive access
+	  instructions rely on a local monitor that tags any address from which the processor executes
+	  a Load-Exclusive.
+
+	  ARM DDI 0406C.d Exclusive access instructions and Shareable memory regions:
+	  For memory regions that have the Shareable attribute, exclusive access instructions rely on:
+	  a global monitor that tags a physical address as exclusive access for a particular processor.
+
+	  The global monitor can either reside in a processor block or exist as a secondary monitor at
+	  the memory interfaces.
+
+	  The global monitor only supports a single outstanding exclusive access to Shareable memory per
+	  processor.
+
+	  It is IMPLEMENTATION DEFINED whether the system includes a Global Monitor. If the system only
+	  has a Local Monitor, and the Local Monitor doesn't function as a Global Monitor (i.e., they
+	  aren't combined), and memory is marked as "Shareable," this configuration can result in the
+	  failure of exclusive operations on these systems. Therefore, it's recommended to refrain from
+	  applying the shareable attribute to memory on such systems.
+
+
 endif # CPU_HAS_MMU
