@@ -1,0 +1,29 @@
+/*
+ * Copyright (c) 2023 EPAM Systems
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+/ {
+	test_device: test_device {
+		compatible = "vnd,pinctrl-device";
+		pinctrl-0 = <&group1>;
+		pinctrl-1 = <&group2>;
+		pinctrl-names = "default", "sleep";
+	};
+};
+
+&pinctrl {
+		/* Note: the groups are just meant for testing if properties and
+		   pins are parsed correctly, but do not necessarily represent a
+		   feasible combination */
+		group1: group1 {
+			pinmux = <RZA2_PINMUX(PORT8, 5, 4)>,
+				 <RZA2_PINMUX(PORT8, 6, 4)>,
+				 <RZA2_PINMUX(PORT8, 7, 4)>,
+				 <RZA2_PINMUX(PORT8, 4, 4)>;
+		};
+		group2: group2 {
+			pinmux = <RZA2_PINMUX(PORTD, 4, 1)>,
+				 <RZA2_PINMUX(PORTD, 5, 1)>;
+		};
+};

@@ -1,0 +1,8 @@
+tests:
+  drivers.pinctrl.rz_a2m:
+    tags:
+      - drivers
+      - pinctrl
+    depends_on:
+      - pinctrl
+      - rz_a2m
