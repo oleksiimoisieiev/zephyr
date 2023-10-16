@@ -239,6 +239,8 @@ static int rza2_set_ppoc(const pinctrl_soc_pin_t pin)
 
 static int pinctrl_configure_pin(const pinctrl_soc_pin_t pin)
 {
+	int ret = 0;
+
 	if (pin.func & FUNC_GPIO_INPUT) {
 		rza2_pin_to_gpio(pin.port, pin.pin, RZA2_PDR_INPUT);
 	} else if (pin.func & FUNC_GPIO_OUTPUT) {
@@ -248,13 +250,13 @@ static int pinctrl_configure_pin(const pinctrl_soc_pin_t pin)
 	} else if (pin.func & FUNC_GPIO_INT_DIS) {
 		rza2_set_gpio_int(pin.port, pin.pin, false);
 	} else if (pin.port == PORTCKIO) {
-		return rza2_set_ckio_drive(pin.drive_strength);
+		ret = rza2_set_ckio_drive(pin.drive_strength);
 	} else if (pin.port == PORTPPOC) {
-		return rza2_set_ppoc(pin);
+		ret = rza2_set_ppoc(pin);
 	} else {
 		rza2_set_pin_function(pin.port, pin.pin, pin.func);
 	}
-	return 0;
+	return ret;
 }
 
 int pinctrl_configure_pins(const pinctrl_soc_pin_t *pins, uint8_t pin_cnt, uintptr_t reg)

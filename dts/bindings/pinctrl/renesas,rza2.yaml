@@ -21,7 +21,8 @@ properties:
 
 child-binding:
   description: |
-     This binding gives a base representation of the RZ/A2 pinmux configuration and GPIO ports description.
+     This binding gives a base representation of the RZ/A2 pinmux configuration
+     and GPIO ports description.
 
   include:
     - name: pincfg-node.yaml
@@ -36,7 +37,6 @@ child-binding:
         helper macro in pinctrl-r7s9210.h.
 
     drive-strength:
-      required: false
       type: int
       enum:
         - 1 # 8 mA

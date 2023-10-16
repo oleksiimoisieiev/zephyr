@@ -10,9 +10,6 @@ properties:
     description: |
       GPIO region for I/O operations.
 
-  interrupts:
-    required: false
-
   "#address-cells":
     const: 1
 
