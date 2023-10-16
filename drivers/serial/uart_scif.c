@@ -543,8 +543,6 @@ static void uart_scif_async_init(const struct device *dev)
 	data->dma_tx.dma_cfg.user_data = (void *)dev;
 	data->dma_tx.dma_cfg.dma_slot = data->dma_tx.dma_slot;
 	data->async_inited = true;
-
-	return;
 }
 #endif
 
@@ -1246,14 +1244,14 @@ static const struct uart_driver_api uart_scif_driver_api = {
 		UART_SET_IRQ(n, txi);							\
 		UART_SET_IRQ(n, tei);							\
 	}
-#define UART_SCIF_IRQ_CFG_FUNC_INIT(n) 							\
+#define UART_SCIF_IRQ_CFG_FUNC_INIT(n)							\
 	.irq_config_func = irq_config_func_##n
-#define UART_SCIF_INIT_CFG(n, soc_type) 						\
+#define UART_SCIF_INIT_CFG(n, soc_type)						\
 	UART_SCIF_DECLARE_CFG(n, soc_type, UART_SCIF_IRQ_CFG_FUNC_INIT(n))
 #else
 #define UART_SCIF_IRQ_CONFIG_FUNC(n)
 #define UART_SCIF_IRQ_CFG_FUNC_INIT
-#define UART_SCIF_INIT_CFG(n, soc_type) 						\
+#define UART_SCIF_INIT_CFG(n, soc_type)						\
 	UART_SCIF_DECLARE_CFG(n, soc_type, UART_SCIF_IRQ_CFG_FUNC_INIT)
 #endif
 
