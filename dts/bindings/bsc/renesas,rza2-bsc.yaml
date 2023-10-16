@@ -25,15 +25,16 @@ child-binding:
   description: |
     LSI has 32-bit address space, divided into external memory spaces according to the upper
     bits of address:
-      H'00000000 to H'03FFFFFF CS0 Normal space, SRAM with byte selection, burst ROM (asynchronous or synchronous)
+      H'00000000 to H'03FFFFFF CS0 Normal space, SRAM with byte selection,
+                 burst ROM (asynchronous or synchronous)
       H'04000000 to H'07FFFFFF CS1 Normal space, SRAM with byte selection
       H'08000000 to H'0BFFFFFF CS2 Normal space, SRAM with byte selection, SDRAM
       H'0C000000 to H'0FFFFFFF CS3 Normal space, SRAM with byte selection, SDRAM
       H'10000000 to H'13FFFFFF CS4 Normal space, SRAM with byte selection, burst ROM (asynchronous)
       H'14000000 to H'17FFFFFF CS5 Normal space, SRAM with byte selection, MPX-I/O
-      H’1F000000 to H’8FFFFFFF Others On-chip peripheral module, SPI multi I/O bus space, HyperFlash TM / HyperRAM TM
-      space, OctaFlash TM / OctaRAM TM space, on-chip large-capacity RAM, on-chip data
-      retention RAM, reserved area.
+      H’1F000000 to H’8FFFFFFF Others On-chip peripheral module, SPI multi I/O bus space,
+                 HyperFlash TM / HyperRAM TM space, OctaFlash TM / OctaRAM TM space, on-chip
+                 large-capacity RAM, on-chip data retention RAM, reserved area.
     Each node represets one Address area with the selected memory type.
 
   include: pinctrl-device.yaml
@@ -57,14 +58,12 @@ child-binding:
       description: Memory type.
 
     pinctrl-0:
-      required: false
       description: |
         Set pin configuration for the Bus State Controller. This is needed to
         control and configure Data and Access busses.
 
     sw:
       type: int
-      required: false
       enum:
         - 0 # 0.5 cycles
         - 1 # 1.5 cycles
@@ -74,7 +73,6 @@ child-binding:
 
     hw:
       type: int
-      required: false
       enum:
         - 0 # 0.5 cycles
         - 1 # 1.5 cycles
@@ -84,71 +82,58 @@ child-binding:
 
     iwrrs:
       type: int
-      required: false
       description: |
         Idle Cycles for Read-Read in the Same Space. Please See HW Manual for supported values.
 
     iwrrd:
       type: int
-      required: false
       description: |
         Idle Cycles for Read-Read in Another Space. Please See HW Manual for supported values.
 
     idle:
       type: int
-      required: false
       description: Idle time for SDRAM startup sequence. Size uint32.
 
     sdcs2:
       type: int
-      required: false
       description: set MODE CS2 for SDRAM. Size uint16.
 
     sdcs3:
       type: int
-      required: false
       description: set MODE CS3 for SDRAM. Size uint16.
 
     iwrws:
       type: int
-      required: false
       description: Idle Cycles for Read-Write in the Same Space.
 
     iwrwd:
       type: int
-      required: false
       description: Idle Cycles for Another Space Read-Write
 
     iww:
       type: int
-      required: false
       description: Idle Cycles between Write-Read Cycles and Write-Write Cycles
 
     auto_ref:
       type: int
-      required: false
       description: Auto refresh feature. 1 to enable and 0 to disable.
 
     rtcor:
       type: int
-      required: false
       description: Refresh Timer Constant Register value. Size is uint8.
 
     rtcnt:
       type: int
-      required: false
       description: Refresh Timer Counter value. Size is uint8.
 
     cks:
       type: int
-      required: false
       description: |
         Select the clock input to count-up the refresh timer counter (RTCNT).
         See HW manual for allowed values.
 
     rrc:
       type: int
-      required: false
       enum:
         - 1
         - 2
@@ -159,7 +144,6 @@ child-binding:
 
     deep:
       type: int
-      required: false
       enum:
         - 0 # Self-refresh mode
         - 1 # Deep power-down mode
@@ -167,17 +151,14 @@ child-binding:
 
     pwr_down:
       type: int
-      required: false
       description: Set powerdown state.
 
     bas:
       type: int
-      required: false
       description: SRAM with Byte Selection Byte Access Select.
 
     bw:
       type: int
-      required: false
       enum:
         - 0 # no cycle
         - 1 # 1 cycle
@@ -187,7 +168,6 @@ child-binding:
 
     a2row:
       type: int
-      required: false
       enum:
         - 0 # 11 bits
         - 1 # 12 bits
@@ -196,7 +176,6 @@ child-binding:
 
     a2col:
       type: int
-      required: false
       enum:
         - 0 # 8 bits
         - 1 # 9 bits
@@ -205,7 +184,6 @@ child-binding:
 
     a3col:
       type: int
-      required: false
       enum:
         - 0 # 8 bits
         - 1 # 9 bits
@@ -214,7 +192,6 @@ child-binding:
 
     a3row:
       type: int
-      required: false
       enum:
         - 0 # 11 bits
         - 1 # 12 bits
@@ -223,7 +200,6 @@ child-binding:
 
     bactv:
       type: int
-      required: false
       enum:
         - 0 # Auto-precharge mode
         - 1 # Bank active mode
@@ -231,7 +207,6 @@ child-binding:
 
     wr_wait_cycles:
       type: int
-      required: false
       enum:
         - 0 # No cycle
         - 1
@@ -250,7 +225,6 @@ child-binding:
 
     ww_wait_cycles:
       type: int
-      required: false
       enum:
         - 0 # No cycle
         - 1
@@ -263,7 +237,6 @@ child-binding:
 
     wtrcd:
       type: int
-      required: false
       enum:
         - 0 # No cycle
         - 1
@@ -273,7 +246,6 @@ child-binding:
 
     a3cl:
       type: int
-      required: false
       enum:
         - 1 # cycle
         - 2
@@ -283,7 +255,6 @@ child-binding:
 
     wtrp:
       type: int
-      required: false
       enum:
         - 0 # No cycle
         - 1
@@ -293,7 +264,6 @@ child-binding:
 
     trwl:
       type: int
-      required: false
       enum:
         - 0 # No cycle
         - 1
@@ -303,7 +273,6 @@ child-binding:
 
     wtrc:
       type: int
-      required: false
       enum:
         - 2 # Cycles
         - 3
@@ -315,7 +284,6 @@ child-binding:
 
     a2cl:
       type: int
-      required: false
       enum:
         - 0 # 1 Cycle
         - 1 # 2 Cycles
@@ -325,7 +293,6 @@ child-binding:
 
     wm:
       type: int
-      required: false
       enum:
         - 0 # External wait input is valid
         - 1 # External wait input is ignored
@@ -333,7 +300,6 @@ child-binding:
 
     bsz:
       type: int
-      required: false
       enum:
         - 8 # 8 bit bus width
         - 16 # 16 bit bus width
@@ -343,7 +309,6 @@ child-binding:
 
     szsel:
       type: int
-      required: false
       enum:
         - 0 # Selects the bus width by address A14
         - 1 # Selects the bus width by address A21
@@ -353,7 +318,6 @@ child-binding:
 
     sdridly:
       type: int
-      required: false
       enum:
         - 0 # The SDRAM is not to be connected.
         - 15 # (0xF). The SDRAM is to be connected.
@@ -361,7 +325,6 @@ child-binding:
 
     sdrodly:
       type: int
-      required: false
       enum:
         - 0 # The SDRAM is not to be connected.
         - 2 # The SDRAM is to be connected.
