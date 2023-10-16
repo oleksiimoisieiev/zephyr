@@ -91,6 +91,7 @@ void sys_clock_set_timeout(int32_t ticks, bool idle)
 	ticks = CLAMP(ticks - 1, 0, INT32_MAX / 2);
 
 	k_spinlock_key_t key = k_spin_lock(&lock);
+
 	unannounced = sys_read32(OSTM_REG_ADDR(OSTM_CNT_OFFSET)) - ostm_last_cnt + cyc_per_tick - 1;
 	unannounced /= cyc_per_tick;
 
