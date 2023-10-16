@@ -933,7 +933,7 @@ static int dma_rza2_config(const struct device *dev, uint32_t channel, struct dm
 	uint32_t channel_cfg = 0;
 	uint32_t channel_ext;
 	uint32_t dctrl_cfg = 0;
-	struct dma_hw_config dma_hw_config;
+	struct dma_hw_config hw_config;
 	uint32_t interval = 0;
 	uint32_t phys_addr;
 
@@ -942,7 +942,7 @@ static int dma_rza2_config(const struct device *dev, uint32_t channel, struct dm
 		return -EINVAL;
 	}
 
-	dma_hw_config = dma_hw_config_table[dma_cfg->dma_slot];
+	hw_config = dma_hw_config_table[dma_cfg->dma_slot];
 
 	ret = check_ch(dev, channel);
 	if (ret < 0) {
@@ -1004,8 +1004,8 @@ static int dma_rza2_config(const struct device *dev, uint32_t channel, struct dm
 	channel_cfg |= ((ret << DMAC_PRV_CHCFG_SHIFT_SDS) & DMAC_PRV_CHCFG_MASK_SDS);
 	data->channels[channel].direction = dma_cfg->channel_direction;
 
-	channel_cfg |= dma_hw_config.tm_am;
-	channel_cfg |= dma_hw_config.lvl;
+	channel_cfg |= hw_config.tm_am;
+	channel_cfg |= hw_config.lvl;
 
 	if (dma_cfg->channel_direction == MEMORY_TO_MEMORY) {
 		channel_cfg |= DMAC_PRV_CHCFG_SET_REQD_DST;
@@ -1017,14 +1017,14 @@ static int dma_rza2_config(const struct device *dev, uint32_t channel, struct dm
 		/* Set sw_trigger so transfer will start on Channel Enable */
 		data->channels[channel].sw_trigger = 1;
 	} else {
-		if (dma_hw_config.reqd == DMAC_PRV_CHCFG_REQD_UNDEFINED) {
+		if (hw_config.reqd == DMAC_PRV_CHCFG_REQD_UNDEFINED) {
 			if (dma_cfg->channel_direction == PERIPHERAL_TO_MEMORY) {
 				channel_cfg |= DMAC_PRV_CHCFG_SET_REQD_DST;
 			} else {
 				channel_cfg |= DMAC_PRV_CHCFG_SET_REQD_SRC;
 			}
 		} else {
-			channel_cfg |= dma_hw_config.reqd;
+			channel_cfg |= hw_config.reqd;
 		}
 
 		/* HIEN 1 is set for all HW slots */
@@ -1109,7 +1109,7 @@ static int dma_rza2_config(const struct device *dev, uint32_t channel, struct dm
 	rza2_set_chext(dev, channel, channel_ext);
 
 	if (dma_cfg->channel_direction != MEMORY_TO_MEMORY) {
-		rza2_set_dmars(dev, channel, dma_hw_config.dmars);
+		rza2_set_dmars(dev, channel, hw_config.dmars);
 	};
 
 	data->channels[channel].dma_callback = dma_cfg->dma_callback;

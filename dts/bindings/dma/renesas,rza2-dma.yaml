@@ -36,12 +36,6 @@ properties:
   "#dma-cells":
     const: 3
 
-  pinctrl-0:
-    required: false
-
-  pinctrl-names:
-    required: false
-
   dma-buf-addr-alignment:
     required: true
 
