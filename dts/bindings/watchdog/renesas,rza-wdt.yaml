@@ -15,7 +15,6 @@ properties:
     required: true
 
   pinctrl-0:
-    required: false
     description: |
       Pinconfig setting of WDTOVF pin. The WDTOVF pin is used in watchdog timer
       mode to output the WDTOVF signal when the WTCNT overflows. The WDTOVF
