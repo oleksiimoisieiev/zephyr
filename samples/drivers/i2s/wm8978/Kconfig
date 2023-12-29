@@ -1,0 +1,31 @@
+# Private config options for can sample app
+
+# Copyright (c) 2018 Alexander Wachter
+# SPDX-License-Identifier: Apache-2.0
+
+mainmenu "WM8978 loopback"
+
+config WM8978_ANALOG_LOOPBACK
+	bool "Analog loopback mode"
+	default n
+	help
+	  Set the codec to loopback mode.
+	  This connects input line to output line.
+
+config WM8978_MIXER
+	bool "Mix input signal with DAC output"
+	default n
+	depends on WM8978_ANALOG_LOOPBACK
+	help
+	  Mix input signal with DAC output
+
+if !WM8978_ANALOG_LOOPBACK
+config WM8978_LOOPBACK
+	bool "Loopback mode"
+	default n
+	help
+	  Set the codec to loopback mode.
+	  This connects ADC to DAC.
+endif
+
+source "Kconfig.zephyr"

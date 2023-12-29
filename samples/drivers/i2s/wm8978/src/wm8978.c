@@ -19,10 +19,6 @@ LOG_MODULE_REGISTER(codec_wm8978);
 #include <zephyr/drivers/pinctrl.h>
 #include <zephyr/drivers/spi.h>
 
-/* #define WM8978_CALLBACK */
-/* #define WM8978_LOOPBACK */
-/* #define WM8978_MIXER */
-
 /* ==== Register Address ==== */
 #define WM8978_REG_SOFT_RESET		0x00
 #define WM8978_REG_POW_MANAGE1		0x01
@@ -147,6 +143,15 @@ static int wm8978_init(const struct device *dev)
 		LOG_ERR("Bus device %s not ready!", cfg->bus.bus->name);
 		return -EINVAL;
 	}
+#ifdef CONFIG_WM8978_ANALOG_LOOPBACK
+	LOG_WRN("Analog loopback");
+#endif
+#ifdef CONFIG_WM8978_LOOPBACK
+	LOG_WRN("Loopback");
+#endif
+#ifdef CONFIG_WM8978_MIXER
+	LOG_WRN("Analog mixer");
+#endif
 	return 0;
 }
 
@@ -184,7 +189,8 @@ static int codec_configure(const struct device *dev, struct audio_codec_cfg *cfg
 	reg |= WM8978_MANAGE2_INPPGAENR_ON;
 	wm8978_write(dev, WM8978_CMD(WM8978_REG_POW_MANAGE2, reg));
 	temp = reg;
-#ifdef WM8978_LOOPBACK
+#ifdef CONFIG_WM8978_LOOPBACK
+	LOG_WRN("Set loopback");
 	/* ==== Set LOOPBACK = 1 in register R5.  ==== */
 	reg = WM8978_COMPADING_LOOPBACK;
 	wm8978_write(dev, WM8978_CMD(WM8978_REG_COMPADING_CTL, reg));
@@ -228,10 +234,12 @@ static int codec_configure(const struct device *dev, struct audio_codec_cfg *cfg
 	reg = WM8978_DAC_CTL_INI_VALUE | WM8978_DAC_CTL_DACOSR128_ON;
 	wm8978_write(dev, WM8978_CMD(WM8978_REG_DAC_CTL, reg));
 
-#ifdef WM8978_CALLBACK
+#ifdef CONFIG_WM8978_ANALOG_LOOPBACK
+	LOG_WRN("Set analog loopback");
 	/* Set BYPL2LMIX = 0 in register R50. */
 	reg = WM8978_LMIX_CTL_INI_VALUE;
-#ifndef WM9878_MIXER
+#ifndef CONFIG_WM8978_MIXER
+	LOG_WRN("Clear mixer");
 	reg &= ~WM8978_LMIX_CTL_DACL2LMIX_BIT;
 #endif
 	reg |= WM8978_LMIX_CTL_BYPL2LMIX_BIT;
@@ -239,7 +247,8 @@ static int codec_configure(const struct device *dev, struct audio_codec_cfg *cfg
 
 	/* Set BYPR2RMIX = 1 in register R51. */
 	reg = WM8978_RMIX_CTL_INI_VALUE;
-#ifndef WM9878_MIXER
+#ifndef CONFIG_WM8978_MIXER
+	LOG_WRN("Clear mixer");
 	reg &= ~WM8978_RMIX_CTL_DACR2RMIX_BIT;
 #endif
 	reg |= WM8978_RMIX_CTL_BYPR2RMIX_BIT;
