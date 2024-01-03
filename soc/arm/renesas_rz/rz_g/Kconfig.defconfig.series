@@ -1,0 +1,14 @@
+# Renesas RZ G3S SoC line
+
+# Copyright (c) 2024 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+if SOC_SERIES_RZ_G
+
+config SOC_SERIES
+	default "rz_g"
+
+config NUM_IRQS
+	default 480
+
+endif # SOC_SERIES_RZ_G

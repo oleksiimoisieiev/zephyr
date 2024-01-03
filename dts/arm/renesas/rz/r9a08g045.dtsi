@@ -1,0 +1,37 @@
+/*
+ * Copyright (c) 2024 EPAM Systems
+ *
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+#include <arm/armv8-m.dtsi>
+#include <zephyr/dt-bindings/clock/renesas_cpg_mssr.h>
+#include <mem.h>
+
+/ {
+	compatible = "renesas,r9a08g045";
+	#address-cells = <1>;
+	#size-cells = <1>;
+
+	cpus {
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		cpu@0 {
+			device_type = "cpu";
+			compatible = "arm,cortex-m33";
+			reg = <0>;
+		};
+	};
+
+	bus_clk: busclk {
+		#clock-cells = <0>;
+		compatible = "fixed-clock";
+		/* Value must be set by board */
+		clock-frequency = <0>;
+	};
+};
+
+&nvic {
+	arm,num-irq-priority-bits = <1>;
+};
