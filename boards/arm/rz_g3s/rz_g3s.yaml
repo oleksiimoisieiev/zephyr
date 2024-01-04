@@ -1,0 +1,16 @@
+identifier: rz_g3s
+name: Cortex M33 for Renesas RZ/G3S
+type: mcu
+arch: arm
+toolchain:
+  - zephyr
+  - gnuarmemb
+supported:
+  - clock_control
+  - uart
+testing:
+  default: true
+  ignore_tags:
+    - net
+    - bluetooth
+    - isotp

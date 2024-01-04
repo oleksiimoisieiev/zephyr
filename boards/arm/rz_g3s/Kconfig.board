@@ -1,0 +1,6 @@
+# Copyright (c) 2024 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+config BOARD_RZ_G3S
+	bool "Cortex-M33 for Renesas RZ G3S"
+	depends on SOC_R9A08G045

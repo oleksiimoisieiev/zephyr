@@ -1,0 +1,8 @@
+# Copyright (c) 2024 EPAM Systems
+# SPDX-License-Identifier: Apache-2.0
+
+if BOARD_RZ_G3S
+config BOARD
+	default "rz_g3s"
+
+endif # BOARD_RZ_G3S
