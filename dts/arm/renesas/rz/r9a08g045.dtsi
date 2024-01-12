@@ -33,5 +33,5 @@
 };
 
 &nvic {
-	arm,num-irq-priority-bits = <1>;
+	arm,num-irq-priority-bits = <8>;
 };
