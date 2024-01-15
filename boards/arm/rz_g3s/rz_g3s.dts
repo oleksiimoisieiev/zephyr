@@ -17,9 +17,9 @@
 		zephyr,sram = &ram;
 	};
 
-	ram: memory@80000000 {
+	ram: memory@60000000 {
 		compatible = "mmio-sram";
-		reg = <0x80000000 DT_SIZE_M(1)>;		 /* 1  Mbyte of Internal RAM */
+		reg = <0x60000000 DT_SIZE_M(128)>;		 /* 128  Mbyte of  RAM */
 	};
 };
 
