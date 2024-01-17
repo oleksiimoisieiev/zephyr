@@ -6,7 +6,7 @@ comliance-job:
   stage: compliance
   script:
     - echo "Starting compliance check"
-    - cd /builds/rec-rzzp
+    - cd /builds/${CI_PROJECT_NAMESPACE}
     - west init -l zephyr > /dev/null 2>&1 || true
     - cd zephyr
     # WA to skip undef config checks because it fails with errors about
@@ -15,16 +15,16 @@ comliance-job:
     - sed -i "s/self.check_no_undef_outside_kconfig(kconf)/print(\"skip\")/g"
       ./scripts/ci/check_compliance.py
     - export ZEPHYR_BASE=$PWD
-    - ./scripts/ci/check_compliance.py --annotate -e KconfigBasic -c ${CI_DEFAULT_BRANCH}..
+    - ./scripts/ci/check_compliance.py --annotate -e KconfigBasic -c origin/${CI_DEFAULT_BRANCH}..
 
 guidlines-job:
   stage: guidlines
   script:
     - echo "Starting guidlines check"
-    - cd /builds/rec-rzzp
+    - cd /builds/${CI_PROJECT_NAMESPACE}
     - west init -l zephyr > /dev/null 2>&1 || true
     - cd ./zephyr
     - source zephyr-env.sh
-    - export ZEPHYR_BASE=/builds/rec-rzzp/zephyr
-    - ./scripts/ci/guideline_check.py --output output.txt -c ${CI_DEFAULT_BRANCH}.. ||
+    - export ZEPHYR_BASE=/builds/${CI_PROJECT_NAMESPACE}/zephyr
+    - ./scripts/ci/guideline_check.py --output output.txt -c origin/${CI_DEFAULT_BRANCH}.. ||
       cat ./output.txt
