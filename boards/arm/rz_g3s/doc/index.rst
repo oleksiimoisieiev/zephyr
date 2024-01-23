@@ -1,10 +1,16 @@
 .. _rz_g3s:
 
-Renesas RZ G3S
-##############
+Renesas RZ G3S Release Notes v0.1
+#################################
 
 Overview
 ********
+
+.. include:: delivery/delivery_scope.rst
+
+.. include:: delivery/getting_source_code.rst
+
+.. include:: delivery/initial_config.rst
 
 Hardware
 ********
@@ -26,7 +32,7 @@ Connections and IOs
 RZ G3S board
 ------------
 
-Vies of the EVK board:
+Views of the EVK board:
 
 .. figure:: img/rzg3s.jpg
    :align: center
@@ -59,3 +65,12 @@ Flashing
 ========
 
 The flash on board is not supported by Zephyr at this time.
+
+Supported Features Details
+**************************
+
+
+Project Status
+**************
+Current project status can be got from Jira Project:
+https://jiraeu.epam.com/projects/RECRZZP/issues
